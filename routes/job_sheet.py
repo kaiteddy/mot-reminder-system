@@ -7,6 +7,7 @@ from datetime import datetime, date
 import csv
 import io
 from decimal import Decimal, InvalidOperation
+import pandas as pd
 
 job_sheet_bp = Blueprint('job_sheet', __name__)
 
@@ -156,9 +157,26 @@ def process_single_file(file):
     """Process a single file and determine its type"""
     filename = file.filename.lower()
 
-    # Read file content
-    file_content = file.read().decode('utf-8')
-    file.seek(0)  # Reset file pointer
+    # Handle Excel files differently from CSV files
+    if filename.endswith(('.xlsx', '.xls')):
+        # For Excel files, pass the file object directly
+        file_content = None
+        file.seek(0)  # Reset file pointer
+    else:
+        # For CSV files, read as text
+        try:
+            file_content = file.read().decode('utf-8')
+            file.seek(0)  # Reset file pointer
+        except UnicodeDecodeError:
+            # Try different encodings
+            file.seek(0)
+            try:
+                file_content = file.read().decode('latin-1')
+                file.seek(0)
+            except UnicodeDecodeError:
+                file.seek(0)
+                file_content = file.read().decode('cp1252')
+                file.seek(0)
 
     # Determine file type based on filename and content
     if 'customer' in filename:
@@ -172,12 +190,20 @@ def process_single_file(file):
 def process_customer_file(file, file_content):
     """Process customer data file"""
     try:
-        csv_reader = csv.DictReader(io.StringIO(file_content))
+        # Handle Excel files
+        if file.filename.lower().endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file)
+            rows = df.to_dict('records')
+        else:
+            # Handle CSV files
+            csv_reader = csv.DictReader(io.StringIO(file_content))
+            rows = list(csv_reader)
+
         processed = 0
         created = 0
         updated = 0
 
-        for row in csv_reader:
+        for row in rows:
             # Process customer row (simplified)
             processed += 1
             # Add customer processing logic here
@@ -201,12 +227,20 @@ def process_customer_file(file, file_content):
 def process_vehicle_file(file, file_content):
     """Process vehicle data file"""
     try:
-        csv_reader = csv.DictReader(io.StringIO(file_content))
+        # Handle Excel files
+        if file.filename.lower().endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file)
+            rows = df.to_dict('records')
+        else:
+            # Handle CSV files
+            csv_reader = csv.DictReader(io.StringIO(file_content))
+            rows = list(csv_reader)
+
         processed = 0
         created = 0
         updated = 0
 
-        for row in csv_reader:
+        for row in rows:
             # Process vehicle row (simplified)
             processed += 1
             # Add vehicle processing logic here
@@ -230,12 +264,24 @@ def process_vehicle_file(file, file_content):
 def process_job_sheet_file(file, file_content):
     """Process job sheet data file"""
     try:
-        csv_reader = csv.DictReader(io.StringIO(file_content))
+        # Handle Excel files
+        if file.filename.lower().endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file)
+            rows = df.to_dict('records')
+        else:
+            # Handle CSV files
+            csv_reader = csv.DictReader(io.StringIO(file_content))
+            rows = list(csv_reader)
+
         processed = 0
         created = 0
         updated = 0
 
-        for row in csv_reader:
+        # Debug: Print column names for the first row
+        if rows:
+            print(f"Available columns in {file.filename}: {list(rows[0].keys())}")
+
+        for row in rows:
             try:
                 result = process_job_sheet_row(row)
                 processed += 1
@@ -245,6 +291,7 @@ def process_job_sheet_file(file, file_content):
                     updated += 1
             except Exception as e:
                 print(f"Error processing job sheet row: {e}")
+                print(f"Row data keys: {list(row.keys()) if row else 'No row data'}")
 
         return {
             'filename': file.filename,
@@ -282,9 +329,24 @@ def upload_job_sheets():
         return jsonify({'error': 'No file selected'}), 400
 
     try:
-        # Read file content
-        file_content = file.read().decode('utf-8')
-        csv_reader = csv.DictReader(io.StringIO(file_content))
+        # Handle Excel files
+        if file.filename.lower().endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file)
+            rows = df.to_dict('records')
+        else:
+            # Handle CSV files
+            try:
+                file_content = file.read().decode('utf-8')
+            except UnicodeDecodeError:
+                file.seek(0)
+                try:
+                    file_content = file.read().decode('latin-1')
+                except UnicodeDecodeError:
+                    file.seek(0)
+                    file_content = file.read().decode('cp1252')
+
+            csv_reader = csv.DictReader(io.StringIO(file_content))
+            rows = list(csv_reader)
 
         results = {
             'processed': 0,
@@ -295,7 +357,11 @@ def upload_job_sheets():
             'linked_vehicles': 0
         }
 
-        for row_num, row in enumerate(csv_reader, start=2):
+        # Debug: Print column names for the first row
+        if rows:
+            print(f"Available columns in uploaded file: {list(rows[0].keys())}")
+
+        for row_num, row in enumerate(rows, start=2):
             try:
                 result = process_job_sheet_row(row)
                 results['processed'] += 1
@@ -314,6 +380,7 @@ def upload_job_sheets():
                 error_msg = f"Row {row_num}: {str(e)}"
                 results['errors'].append(error_msg)
                 print(f"Error processing row {row_num}: {e}")
+                print(f"Row data keys: {list(row.keys()) if row else 'No row data'}")
 
         # After processing, trigger DVLA lookup for all new vehicles
         if results['created'] > 0 or results['updated'] > 0:
@@ -426,6 +493,20 @@ def trigger_dvla_lookup_for_job_sheets():
 def process_job_sheet_row(row_data):
     """Process a single job sheet row from CSV"""
 
+    # Field mapping for flexible column names
+    def get_field_value(row, possible_names, default=''):
+        """Get field value by trying multiple possible column names"""
+        import pandas as pd
+        for name in possible_names:
+            if name in row and row[name] is not None:
+                # Handle pandas NaN values
+                if pd.isna(row[name]):
+                    continue
+                value = str(row[name]).strip()
+                if value and value.lower() not in ['nan', 'none', '', 'null']:
+                    return value
+        return default
+
     # Parse dates
     def parse_date(date_str):
         if not date_str or date_str.strip() == '':
@@ -458,44 +539,59 @@ def process_job_sheet_row(row_data):
         except (ValueError, TypeError):
             return None
 
-    # Extract data from row
-    doc_id = row_data.get('ID Doc', '').strip()
+    # Extract data from row with flexible field mapping
+    doc_id = get_field_value(row_data, ['ID Doc', 'Doc ID', 'Document ID', 'id', 'ID'])
     if not doc_id:
-        raise ValueError("Missing required field: ID Doc")
+        # Generate a unique doc_id if not provided
+        import uuid
+        doc_id = f"AUTO_{str(uuid.uuid4())[:8]}"
 
     # Check if job sheet already exists
     existing_job_sheet = JobSheet.query.filter_by(doc_id=doc_id).first()
 
-    # Prepare job sheet data
+    # Extract key fields with debug logging
+    customer_name = get_field_value(row_data, ['Customer Name', 'Customer', 'Name', 'Client Name'])
+    vehicle_reg = get_field_value(row_data, ['Vehicle Reg', 'Registration', 'Reg', 'Plate', 'Number Plate'])
+    make = get_field_value(row_data, ['Make', 'Vehicle Make', 'Manufacturer'])
+
+    # Debug: Print first few rows to see what's being extracted
+    if doc_id.startswith('F22A5CD4') or doc_id.startswith('7E816AA1'):
+        print(f"DEBUG - Doc ID: {doc_id}")
+        print(f"DEBUG - Customer Name: '{customer_name}' (from {row_data.get('Customer Name', 'NOT_FOUND')})")
+        print(f"DEBUG - Vehicle Reg: '{vehicle_reg}' (from {row_data.get('Vehicle Reg', 'NOT_FOUND')})")
+        print(f"DEBUG - Make: '{make}' (from {row_data.get('Make', 'NOT_FOUND')})")
+        print(f"DEBUG - Available keys: {list(row_data.keys())[:10]}")
+
+    # Prepare job sheet data with flexible field mapping
     job_sheet_data = {
         'doc_id': doc_id,
-        'doc_type': row_data.get('Doc Type', '').strip(),
-        'doc_no': row_data.get('Doc No', '').strip(),
-        'date_created': parse_date(row_data.get('Date Created')),
-        'date_issued': parse_date(row_data.get('Date Issued')),
-        'date_paid': parse_date(row_data.get('Date Paid')),
-        'customer_id_external': row_data.get('ID Customer', '').strip(),
-        'customer_name': row_data.get('Customer Name', '').strip(),
-        'customer_address': row_data.get('Customer Address', '').strip(),
-        'contact_number': row_data.get('Contact Number', '').strip(),
-        'vehicle_id_external': row_data.get('ID Vehicle', '').strip(),
-        'vehicle_reg': row_data.get('Vehicle Reg', '').strip().upper(),
-        'make': row_data.get('Make', '').strip(),
-        'model': row_data.get('Model', '').strip(),
-        'vin': row_data.get('VIN', '').strip(),
-        'mileage': parse_int(row_data.get('Mileage')),
-        'sub_labour_net': parse_decimal(row_data.get('Sub Labour Net')),
-        'sub_labour_tax': parse_decimal(row_data.get('Sub Labour Tax')),
-        'sub_labour_gross': parse_decimal(row_data.get('Sub Labour Gross')),
-        'sub_parts_net': parse_decimal(row_data.get('Sub Parts Net')),
-        'sub_parts_tax': parse_decimal(row_data.get('Sub Parts Tax')),
-        'sub_parts_gross': parse_decimal(row_data.get('Sub Parts Gross')),
-        'sub_mot_net': parse_decimal(row_data.get('Sub MOT Net')),
-        'sub_mot_tax': parse_decimal(row_data.get('Sub MOT Tax')),
-        'sub_mot_gross': parse_decimal(row_data.get('Sub MOT Gross')),
-        'vat': parse_decimal(row_data.get('VAT')),
-        'grand_total': parse_decimal(row_data.get('Grand Total')),
-        'job_description': row_data.get('Job Description', '').strip()
+        'doc_type': get_field_value(row_data, ['Doc Type', 'Document Type', 'Type'], 'JS'),
+        'doc_no': get_field_value(row_data, ['Doc No', 'Document Number', 'Number', 'Job Number']),
+        'date_created': parse_date(get_field_value(row_data, ['Date Created', 'Created Date', 'Date'])),
+        'date_issued': parse_date(get_field_value(row_data, ['Date Issued', 'Issued Date', 'Issue Date'])),
+        'date_paid': parse_date(get_field_value(row_data, ['Date Paid', 'Paid Date', 'Payment Date'])),
+        'customer_id_external': get_field_value(row_data, ['ID Customer', 'Customer ID', 'Customer']),
+        'customer_name': customer_name,
+        'customer_address': get_field_value(row_data, ['Customer Address', 'Address', 'Customer Addr']),
+        'contact_number': get_field_value(row_data, ['Contact Number', 'Phone', 'Mobile', 'Contact', 'Phone Number']),
+        'vehicle_id_external': get_field_value(row_data, ['ID Vehicle', 'Vehicle ID', 'Vehicle']),
+        'vehicle_reg': vehicle_reg.upper() if vehicle_reg else '',
+        'make': make,
+        'model': get_field_value(row_data, ['Model', 'Vehicle Model']),
+        'vin': get_field_value(row_data, ['VIN', 'Chassis Number', 'Vehicle VIN']),
+        'mileage': parse_int(get_field_value(row_data, ['Mileage', 'Miles', 'Odometer'])),
+        'sub_labour_net': parse_decimal(get_field_value(row_data, ['Sub Labour Net', 'Labour Net', 'Labor Net'])),
+        'sub_labour_tax': parse_decimal(get_field_value(row_data, ['Sub Labour Tax', 'Labour Tax', 'Labor Tax'])),
+        'sub_labour_gross': parse_decimal(get_field_value(row_data, ['Sub Labour Gross', 'Labour Gross', 'Labor Gross'])),
+        'sub_parts_net': parse_decimal(get_field_value(row_data, ['Sub Parts Net', 'Parts Net'])),
+        'sub_parts_tax': parse_decimal(get_field_value(row_data, ['Sub Parts Tax', 'Parts Tax'])),
+        'sub_parts_gross': parse_decimal(get_field_value(row_data, ['Sub Parts Gross', 'Parts Gross'])),
+        'sub_mot_net': parse_decimal(get_field_value(row_data, ['Sub MOT Net', 'MOT Net'])),
+        'sub_mot_tax': parse_decimal(get_field_value(row_data, ['Sub MOT Tax', 'MOT Tax'])),
+        'sub_mot_gross': parse_decimal(get_field_value(row_data, ['Sub MOT Gross', 'MOT Gross'])),
+        'vat': parse_decimal(get_field_value(row_data, ['VAT', 'Tax', 'Sales Tax'])),
+        'grand_total': parse_decimal(get_field_value(row_data, ['Grand Total', 'Total', 'Amount', 'Final Total'])),
+        'job_description': get_field_value(row_data, ['Job Description', 'Description', 'Work Description', 'Notes'])
     }
 
     # Try to link with existing customers and vehicles
