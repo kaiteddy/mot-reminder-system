@@ -8,6 +8,7 @@ class Customer(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100))
     phone = db.Column(db.String(20))
+    account = db.Column(db.String(100))  # External customer account ID
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -20,6 +21,7 @@ class Customer(db.Model):
             'name': self.name,
             'email': self.email,
             'phone': self.phone,
+            'account': self.account,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }

@@ -34,10 +34,19 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Initialize navigation
 function initNavigation() {
-    document.querySelectorAll('.nav-link').forEach(link => {
+    console.log('Initializing navigation...');
+
+    // Handle both old .nav-link and new Apple-style navigation
+    const navLinks = document.querySelectorAll('.nav-link, .apple-nav-links a');
+    console.log('Found navigation links:', navLinks.length);
+
+    navLinks.forEach((link, index) => {
+        const page = link.getAttribute('data-page');
+        console.log(`Nav link ${index}: ${page}`);
+
         link.addEventListener('click', function(e) {
             e.preventDefault();
-            const page = this.getAttribute('data-page');
+            console.log('Navigation clicked:', page);
             showPage(page);
         });
     });
@@ -45,19 +54,33 @@ function initNavigation() {
 
 // Show selected page
 function showPage(page) {
+    console.log('Showing page:', page);
+
     // Hide all pages
     document.querySelectorAll('.page').forEach(p => {
         p.style.display = 'none';
     });
 
     // Show selected page
-    document.getElementById(`${page}-page`).style.display = 'block';
+    const targetPage = document.getElementById(`${page}-page`);
+    if (targetPage) {
+        targetPage.style.display = 'block';
+        console.log('Successfully showed page:', page);
+    } else {
+        console.error('Page not found:', `${page}-page`);
+    }
 
-    // Update active nav link
-    document.querySelectorAll('.nav-link').forEach(link => {
+    // Update active nav link for both old and new navigation
+    document.querySelectorAll('.nav-link, .apple-nav-links a').forEach(link => {
         link.classList.remove('active');
     });
-    document.querySelector(`.nav-link[data-page="${page}"]`).classList.add('active');
+    const activeLink = document.querySelector(`.nav-link[data-page="${page}"], .apple-nav-links a[data-page="${page}"]`);
+    if (activeLink) {
+        activeLink.classList.add('active');
+        console.log('Updated active nav link for:', page);
+    } else {
+        console.warn('Nav link not found for page:', page);
+    }
 
     // Load page data
     currentPage = page;
@@ -80,6 +103,8 @@ function showPage(page) {
         case 'settings':
             loadSettings();
             break;
+        default:
+            console.warn('Unknown page:', page);
     }
 }
 
@@ -201,19 +226,10 @@ function startAIAnimations() {
     startAvatarPulse();
 }
 
-// Type AI Insights with animation
+// Type AI Insights with animation (legacy - now handled by loadAIInsights)
 function typeAIInsights() {
-    const insights = document.querySelectorAll('.ai-insight-content div');
-    insights.forEach((insight, index) => {
-        const text = insight.innerHTML;
-        insight.innerHTML = '';
-        insight.style.opacity = '0';
-
-        setTimeout(() => {
-            insight.style.opacity = '1';
-            typeText(insight, text, 50);
-        }, index * 2000);
-    });
+    // This function is now handled by the dynamic AI insights loading
+    // Keeping for compatibility but functionality moved to loadAIInsights()
 }
 
 // Type text with animation
@@ -605,6 +621,91 @@ function loadDashboard() {
             console.error('Error loading due reminders:', error);
             showToast('Error', 'Failed to load due reminders');
         });
+
+    // Load AI insights
+    loadAIInsights();
+}
+
+// Load AI insights
+function loadAIInsights() {
+    const insightsContainer = document.getElementById('ai-insights-content');
+
+    // Show loading state
+    insightsContainer.innerHTML = `
+        <div class="ai-loading">
+            <i class="fas fa-spinner fa-spin"></i> Analyzing your data to generate insights...
+        </div>
+    `;
+
+    fetch('/api/insights')
+        .then(response => response.json())
+        .then(data => {
+            renderAIInsights(data.insights, data.stats);
+        })
+        .catch(error => {
+            console.error('Error loading AI insights:', error);
+            insightsContainer.innerHTML = `
+                <div class="ai-error">
+                    <i class="fas fa-exclamation-triangle"></i> Unable to generate insights at this time.
+                </div>
+            `;
+        });
+}
+
+// Render AI insights
+function renderAIInsights(insights, stats) {
+    const insightsContainer = document.getElementById('ai-insights-content');
+
+    if (!insights || insights.length === 0) {
+        insightsContainer.innerHTML = `
+            <div class="ai-info">
+                <strong>💡 Getting Started:</strong> Upload your vehicle data or job sheets to start receiving AI-powered insights and recommendations.
+            </div>
+        `;
+        return;
+    }
+
+    let insightsHTML = '';
+    insights.forEach((insight, index) => {
+        const typeClass = getInsightTypeClass(insight.type);
+        insightsHTML += `
+            <div class="ai-insight ${typeClass}" style="animation-delay: ${index * 0.5}s">
+                <strong>${insight.icon} ${insight.title}:</strong> ${insight.message}
+            </div>
+        `;
+    });
+
+    insightsContainer.innerHTML = insightsHTML;
+
+    // Update stats if available
+    if (stats) {
+        updateDashboardStats(stats);
+    }
+}
+
+// Get CSS class for insight type
+function getInsightTypeClass(type) {
+    switch(type) {
+        case 'urgent': return 'ai-urgent';
+        case 'warning': return 'ai-warning';
+        case 'recommendation': return 'ai-recommendation';
+        case 'success': return 'ai-success';
+        case 'action': return 'ai-action';
+        case 'prediction': return 'ai-prediction';
+        case 'info':
+        default: return 'ai-info';
+    }
+}
+
+// Update dashboard stats
+function updateDashboardStats(stats) {
+    if (stats.overdue_mots !== undefined) {
+        // Update the reminders count to show overdue MOTs
+        const remindersCount = document.getElementById('reminders-due-count');
+        if (remindersCount) {
+            remindersCount.textContent = stats.overdue_mots + stats.expiring_soon;
+        }
+    }
 }
 
 // Update vehicle-customer mapping
@@ -627,7 +728,13 @@ function renderDueRemindersTable(dueReminders) {
 
     if (dueReminders.length === 0) {
         const row = document.createElement('tr');
-        row.innerHTML = '<td colspan="5" class="text-center">No reminders due</td>';
+        row.innerHTML = `
+            <td colspan="5" class="apple-empty-state" style="padding: var(--apple-spacing-lg);">
+                <div class="apple-empty-state-icon">🎯</div>
+                <div class="apple-empty-state-title">No Urgent Reminders</div>
+                <div class="apple-empty-state-subtitle">All MOT reminders are up to date</div>
+            </td>
+        `;
         tableBody.appendChild(row);
         return;
     }
@@ -650,11 +757,11 @@ function renderDueRemindersTable(dueReminders) {
 
         row.innerHTML = `
             <td class="registration-cell">${createNumberPlateWithDVLALink(vehicle.registration || '', 'small')}</td>
-            <td class="customer-cell single-line">${customer.name || ''}</td>
+            <td class="customer-cell">${customer.name || ''}</td>
             <td class="date-cell">${formatDateUK(vehicle.mot_expiry)}</td>
             <td class="days-cell">${daysLeft}</td>
             <td class="actions-cell">
-                <button class="btn btn-sm btn-primary process-reminder-btn" data-id="${reminder.id}">
+                <button class="apple-btn apple-btn-primary process-reminder-btn" data-id="${reminder.id}" style="padding: 6px 12px; min-height: auto; font-size: 13px;">
                     <i class="bi bi-envelope"></i> Send
                 </button>
             </td>
@@ -2383,7 +2490,13 @@ function displayRemindersTable(reminders, vehicles) {
 
     if (reminders.length === 0) {
         const row = document.createElement('tr');
-        row.innerHTML = '<td colspan="10" class="text-center py-4"><em>No reminders found. Upload vehicles with MOT dates to create reminders.</em></td>';
+        row.innerHTML = `
+            <td colspan="10" class="apple-empty-state" style="padding: var(--apple-spacing-xl);">
+                <div class="apple-empty-state-icon">🔔</div>
+                <div class="apple-empty-state-title">No Reminders Found</div>
+                <div class="apple-empty-state-subtitle">Upload vehicles with MOT dates to create reminders automatically</div>
+            </td>
+        `;
         tableBody.appendChild(row);
         return;
     }
@@ -2400,7 +2513,13 @@ function displayRemindersTable(reminders, vehicles) {
 
     if (validReminders.length === 0) {
         const row = document.createElement('tr');
-        row.innerHTML = '<td colspan="10" class="text-center py-4"><em>No valid reminders found. Vehicles may have been deleted.</em></td>';
+        row.innerHTML = `
+            <td colspan="10" class="apple-empty-state" style="padding: var(--apple-spacing-xl);">
+                <div class="apple-empty-state-icon">⚠️</div>
+                <div class="apple-empty-state-title">No Valid Reminders</div>
+                <div class="apple-empty-state-subtitle">Vehicles may have been deleted. Try the DVLA cleanup to refresh data.</div>
+            </td>
+        `;
         tableBody.appendChild(row);
         return;
     }
@@ -2443,48 +2562,48 @@ function createReminderRow(reminder, vehicle) {
     if (daysUntil !== null) {
         if (daysUntil < 0) {
             daysDisplay = `${Math.abs(daysUntil)} days ago`;
-            daysClass = 'text-danger fw-bold';
+            daysClass = 'apple-status-critical';
         } else if (daysUntil === 0) {
             daysDisplay = 'Today';
-            daysClass = 'text-danger fw-bold';
+            daysClass = 'apple-status-critical';
         } else {
             daysDisplay = `${daysUntil} days`;
-            if (daysUntil <= 7) daysClass = 'text-danger fw-bold';
-            else if (daysUntil <= 30) daysClass = 'text-warning fw-bold';
-            else daysClass = 'text-success';
+            if (daysUntil <= 7) daysClass = 'apple-status-critical';
+            else if (daysUntil <= 30) daysClass = 'apple-status-high';
+            else daysClass = 'apple-status-low';
         }
     }
 
     // Urgency badge
-    const urgencyBadge = getUrgencyBadge(motStatus.urgency);
+    const urgencyBadge = getUrgencyBadgeApple(motStatus.urgency);
 
     // Status badge
-    const statusBadge = getStatusBadge(reminder.status);
+    const statusBadge = getStatusBadgeApple(reminder.status);
 
     row.innerHTML = `
         <td>
-            <input type="checkbox" class="form-check-input reminder-checkbox" value="${reminder.id}">
+            <input type="checkbox" class="reminder-checkbox" value="${reminder.id}" style="margin: 0;">
         </td>
         <td class="clickable-cell registration-cell" data-reminder-id="${reminder.id}">${createNumberPlateWithDVLALink(vehicle.registration, 'small')}</td>
-        <td class="clickable-cell single-line" data-reminder-id="${reminder.id}">${trimVehicleInfo(vehicle.make, vehicle.model)}</td>
+        <td class="clickable-cell" data-reminder-id="${reminder.id}">${trimVehicleInfo(vehicle.make, vehicle.model)}</td>
         <td class="clickable-cell date-cell" data-reminder-id="${reminder.id}">${formatDateUK(vehicle.mot_expiry)}</td>
         <td class="clickable-cell days-cell" data-reminder-id="${reminder.id}"><span class="${daysClass}">${daysDisplay}</span></td>
-        <td class="clickable-cell single-line" data-reminder-id="${reminder.id}">${urgencyBadge}</td>
-        <td class="clickable-cell customer-cell single-line" data-reminder-id="${reminder.id}">${trimCustomerName(vehicle.customer_name) || 'No customer'}</td>
+        <td class="clickable-cell" data-reminder-id="${reminder.id}">${urgencyBadge}</td>
+        <td class="clickable-cell customer-cell" data-reminder-id="${reminder.id}">${trimCustomerName(vehicle.customer_name) || 'No customer'}</td>
         <td class="clickable-cell date-cell" data-reminder-id="${reminder.id}">${formatDateUK(reminder.reminder_date)}</td>
-        <td class="clickable-cell single-line" data-reminder-id="${reminder.id}">${statusBadge}</td>
+        <td class="clickable-cell status-cell" data-reminder-id="${reminder.id}">${statusBadge}</td>
         <td class="actions-cell">
-            <div class="btn-group btn-group-sm">
-                <button class="btn btn-outline-info view-reminder-btn" data-id="${reminder.id}" title="View Details">
+            <div style="display: flex; gap: 4px; justify-content: center;">
+                <button class="apple-btn apple-btn-secondary view-reminder-btn" data-id="${reminder.id}" title="View Details" style="padding: 6px 10px; min-height: auto;">
                     <i class="bi bi-eye"></i>
                 </button>
-                <button class="btn btn-outline-success send-reminder-btn" data-id="${reminder.id}" title="Send Reminder">
+                <button class="apple-btn apple-btn-success send-reminder-btn" data-id="${reminder.id}" title="Send Reminder" style="padding: 6px 10px; min-height: auto;">
                     <i class="bi bi-send"></i>
                 </button>
-                <button class="btn btn-outline-warning archive-reminder-btn" data-id="${reminder.id}" title="Archive">
+                <button class="apple-btn apple-btn-warning archive-reminder-btn" data-id="${reminder.id}" title="Archive" style="padding: 6px 10px; min-height: auto;">
                     <i class="bi bi-archive"></i>
                 </button>
-                <button class="btn btn-outline-danger delete-reminder-btn" data-id="${reminder.id}" title="Delete">
+                <button class="apple-btn apple-btn-danger delete-reminder-btn" data-id="${reminder.id}" title="Delete" style="padding: 6px 10px; min-height: auto;">
                     <i class="bi bi-trash"></i>
                 </button>
             </div>
@@ -2513,6 +2632,27 @@ function getStatusBadge(status) {
         'archived': '<span class="badge bg-secondary">Archived</span>'
     };
     return badges[status] || '<span class="badge bg-light">Unknown</span>';
+}
+
+function getUrgencyBadgeApple(urgency) {
+    const badges = {
+        'critical': '<span class="apple-badge apple-badge-danger">🔴 Critical</span>',
+        'high': '<span class="apple-badge apple-badge-warning">🟠 High</span>',
+        'medium': '<span class="apple-badge apple-badge-warning">🟡 Medium</span>',
+        'low': '<span class="apple-badge apple-badge-success">🟢 Low</span>',
+        'none': '<span class="apple-badge apple-badge-secondary">❓ Unknown</span>'
+    };
+    return badges[urgency] || badges['none'];
+}
+
+function getStatusBadgeApple(status) {
+    const badges = {
+        'scheduled': '<span class="apple-badge apple-badge-warning">📅 Scheduled</span>',
+        'sent': '<span class="apple-badge apple-badge-success">✅ Sent</span>',
+        'failed': '<span class="apple-badge apple-badge-danger">❌ Failed</span>',
+        'archived': '<span class="apple-badge apple-badge-secondary">📁 Archived</span>'
+    };
+    return badges[status] || '<span class="apple-badge apple-badge-secondary">❓ Unknown</span>';
 }
 
 function setupReminderEventListeners() {
@@ -2595,6 +2735,9 @@ function setupReminderEventListeners() {
 
     // Clear all reminders button
     document.getElementById('clear-all-reminders-btn')?.addEventListener('click', clearAllReminders);
+
+    // Cleanup invalid reminders button
+    document.getElementById('cleanup-invalid-reminders-btn')?.addEventListener('click', cleanupInvalidReminders);
 }
 
 function updateBulkActionsVisibility() {
@@ -2744,6 +2887,55 @@ function clearAllReminders() {
     .catch(error => {
         console.error('Error clearing reminders:', error);
         showToast('Error', 'Failed to clear reminders');
+    });
+}
+
+// Cleanup invalid reminders with DVLA verification
+function cleanupInvalidReminders() {
+    if (!confirm('This will verify all reminders against DVLA data and remove any that are invalid (e.g., MOT not actually due). This may take a few minutes. Continue?')) {
+        return;
+    }
+
+    const btn = document.getElementById('cleanup-invalid-reminders-btn');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying with DVLA...';
+    btn.disabled = true;
+
+    fetch('/api/reminders/cleanup-invalid', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            showToast('Error', data.error);
+        } else {
+            let message = `DVLA Cleanup Complete!\n\n`;
+            message += `• Invalid reminders removed: ${data.invalid_reminders_removed}\n`;
+            message += `• Vehicle MOT dates updated: ${data.vehicles_updated}\n`;
+            message += `• New reminders created: ${data.new_reminders_created}\n`;
+            if (data.dvla_errors > 0) {
+                message += `• DVLA lookup errors: ${data.dvla_errors}`;
+            }
+
+            showToast('Success', message);
+            loadReminders();
+
+            // Also refresh dashboard if we're on it
+            if (currentPage === 'dashboard') {
+                loadDashboard();
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error cleaning up reminders:', error);
+        showToast('Error', 'Failed to cleanup reminders');
+    })
+    .finally(() => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
     });
 }
 
@@ -3090,20 +3282,52 @@ function populateReminderDetailsModal(data) {
 
     // Populate vehicle information
     const vehicleInfo = document.getElementById('reminder-vehicle-info');
-    const motExpiry = formatDateUK(vehicle.mot_expiry);
+
+    // Determine which MOT expiry date to display (DVLA takes precedence)
+    let motExpiryDisplay = '';
+    let motExpiryClass = 'text-muted';
+
+    if (dvla_data && dvla_data.motExpiryDate) {
+        // Use DVLA MOT expiry date
+        const dvlaMotExpiry = formatDateUK(dvla_data.motExpiryDate);
+        const vehicleMotExpiry = formatDateUK(vehicle.mot_expiry);
+
+        if (vehicleMotExpiry && dvlaMotExpiry !== vehicleMotExpiry) {
+            // Dates differ - show both with warning and update button
+            motExpiryDisplay = `
+                <span class="text-success"><strong>${dvlaMotExpiry}</strong> (DVLA)</span><br>
+                <small class="text-muted">Database: ${vehicleMotExpiry}</small>
+                <br><small class="text-warning"><i class="fas fa-exclamation-triangle"></i> Dates differ - DVLA is authoritative</small>
+                <br><button class="btn btn-sm btn-warning mt-1" onclick="updateVehicleMotFromDvla(${vehicle.id}, '${dvla_data.motExpiryDate}')">
+                    <i class="fas fa-sync"></i> Update Database
+                </button>
+            `;
+            motExpiryClass = '';
+        } else {
+            // Use DVLA date
+            motExpiryDisplay = `<span class="text-success"><strong>${dvlaMotExpiry}</strong> (DVLA verified)</span>`;
+            motExpiryClass = '';
+        }
+    } else if (vehicle.mot_expiry) {
+        // Use database MOT expiry date
+        motExpiryDisplay = `<span class="text-warning">${formatDateUK(vehicle.mot_expiry)}</span><br><small class="text-muted">From database - not DVLA verified</small>`;
+        motExpiryClass = '';
+    } else {
+        motExpiryDisplay = 'Not set';
+    }
 
     vehicleInfo.innerHTML = `
-        <div class="row">
+        <div class="row mb-1">
             <div class="col-md-6">
                 <strong>Registration:</strong><br>
                 ${createNumberPlateWithDVLALink(vehicle.registration, 'small')}
             </div>
             <div class="col-md-6">
                 <strong>MOT Expiry:</strong><br>
-                <span class="${vehicle.mot_expiry ? 'text-warning' : 'text-muted'}">${motExpiry}</span>
+                <span class="${motExpiryClass}">${motExpiryDisplay}</span>
             </div>
         </div>
-        <div class="row mt-2">
+        <div class="row mb-1">
             <div class="col-md-6">
                 <strong>Make:</strong><br>
                 ${vehicle.make || 'Not specified'}
@@ -3113,7 +3337,7 @@ function populateReminderDetailsModal(data) {
                 ${vehicle.model || 'Not specified'}
             </div>
         </div>
-        <div class="row mt-2">
+        <div class="row mb-1">
             <div class="col-md-6">
                 <strong>Color:</strong><br>
                 ${vehicle.color || 'Not specified'}
@@ -3129,13 +3353,13 @@ function populateReminderDetailsModal(data) {
     const customerInfo = document.getElementById('reminder-customer-info');
     if (customer) {
         customerInfo.innerHTML = `
-            <div class="row">
+            <div class="row mb-1">
                 <div class="col-md-12">
                     <strong>Name:</strong><br>
-                    <span class="text-primary fs-5">${customer.name}</span>
+                    <span class="text-primary fs-6">${customer.name}</span>
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row mb-1">
                 <div class="col-md-6">
                     <strong>Phone:</strong><br>
                     <a href="tel:${customer.phone}" class="text-decoration-none">${customer.phone}</a>
@@ -3145,7 +3369,7 @@ function populateReminderDetailsModal(data) {
                     <a href="mailto:${customer.email}" class="text-decoration-none">${customer.email}</a>
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row mb-1">
                 <div class="col-md-12">
                     <strong>Address:</strong><br>
                     ${customer.address || 'Not provided'}
@@ -3163,7 +3387,7 @@ function populateReminderDetailsModal(data) {
         const taxExpiry = dvla_data.taxDueDate ? formatDVLADate(dvla_data.taxDueDate) : 'Not available';
 
         dvlaInfo.innerHTML = `
-            <div class="row">
+            <div class="row mb-1">
                 <div class="col-md-3">
                     <strong>Make:</strong><br>
                     ${dvla_data.make || 'Not available'}
@@ -3181,7 +3405,7 @@ function populateReminderDetailsModal(data) {
                     ${dvla_data.yearOfManufacture || 'Not available'}
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row mb-1">
                 <div class="col-md-3">
                     <strong>Engine Size:</strong><br>
                     ${dvla_data.engineCapacity || 'Not available'}
@@ -3203,7 +3427,7 @@ function populateReminderDetailsModal(data) {
                     </span>
                 </div>
             </div>
-            <div class="row mt-2">
+            <div class="row mb-1">
                 <div class="col-md-6">
                     <strong>MOT Expiry:</strong><br>
                     <span class="text-warning">${motExpiry}</span>
@@ -3221,6 +3445,40 @@ function populateReminderDetailsModal(data) {
     // Store reminder ID for potential actions
     document.getElementById('edit-reminder-from-details').setAttribute('data-reminder-id', reminder.id);
     document.getElementById('send-reminder-from-details').setAttribute('data-reminder-id', reminder.id);
+}
+
+// Update vehicle MOT expiry date from DVLA data
+function updateVehicleMotFromDvla(vehicleId, dvlaMotExpiry) {
+    if (!confirm('Update the database MOT expiry date with the DVLA date? This will ensure accurate reminder scheduling.')) {
+        return;
+    }
+
+    fetch(`/api/vehicles/${vehicleId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            mot_expiry: dvlaMotExpiry
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        showToast('Success', 'Vehicle MOT expiry date updated from DVLA data');
+        // Refresh the modal to show updated information
+        const currentReminderId = document.getElementById('edit-reminder-from-details').getAttribute('data-reminder-id');
+        if (currentReminderId) {
+            showReminderDetails(currentReminderId);
+        }
+        // Refresh reminders list if on reminders page
+        if (currentPage === 'reminders') {
+            loadReminders();
+        }
+    })
+    .catch(error => {
+        console.error('Error updating vehicle MOT expiry:', error);
+        showToast('Error', 'Failed to update vehicle MOT expiry date');
+    });
 }
 
 // Theme toggle functionality
@@ -3257,9 +3515,18 @@ function trimCustomerName(customerName) {
     // Remove common prefixes
     let trimmed = customerName.replace(/^(Mr|Mrs|Ms|Dr|Miss)\s+/i, '');
 
-    // If still too long, truncate
-    if (trimmed.length > 15) {
-        trimmed = trimmed.substring(0, 12) + '...';
+    // Remove common suffixes
+    trimmed = trimmed.replace(/\s+(Ltd|Limited|Inc|Corp|Company)$/i, '');
+
+    // If still too long, truncate more aggressively
+    if (trimmed.length > 12) {
+        // Try to keep first name and first letter of last name
+        const parts = trimmed.split(' ');
+        if (parts.length > 1) {
+            trimmed = parts[0] + ' ' + parts[1].charAt(0) + '.';
+        } else {
+            trimmed = trimmed.substring(0, 10) + '...';
+        }
     }
 
     return trimmed;
@@ -3270,15 +3537,36 @@ function trimVehicleInfo(make, model) {
     if (!make && !model) return '';
 
     let info = '';
-    if (make) info += make;
-    if (model) {
-        if (info) info += ' ';
-        info += model;
+
+    // Shorten common make names
+    const makeShortcuts = {
+        'Mercedes-Benz': 'Merc',
+        'Mercedes': 'Merc',
+        'Volkswagen': 'VW',
+        'Hyundai': 'Hyun',
+        'Nissan': 'Niss',
+        'Toyota': 'Toy',
+        'Honda': 'Hon',
+        'Ford': 'Ford'
+    };
+
+    if (make) {
+        info += makeShortcuts[make] || make;
     }
 
-    // Truncate if too long
+    if (model) {
+        if (info) info += ' ';
+        // Truncate model if needed
+        let shortModel = model;
+        if (model.length > 6) {
+            shortModel = model.substring(0, 5) + '.';
+        }
+        info += shortModel;
+    }
+
+    // Final truncation if still too long
     if (info.length > 12) {
-        info = info.substring(0, 9) + '...';
+        info = info.substring(0, 10) + '...';
     }
 
     return info;
@@ -3326,7 +3614,13 @@ function renderJobSheetsTable(jobSheets) {
 
     if (jobSheets.length === 0) {
         const row = document.createElement('tr');
-        row.innerHTML = '<td colspan="9" class="text-center">No job sheets found</td>';
+        row.innerHTML = `
+            <td colspan="9" class="apple-empty-state" style="padding: var(--apple-spacing-lg);">
+                <div class="apple-empty-state-icon">📄</div>
+                <div class="apple-empty-state-title">No Job Sheets Found</div>
+                <div class="apple-empty-state-subtitle">Upload job sheets to get started with analytics and tracking</div>
+            </td>
+        `;
         tableBody.appendChild(row);
         return;
     }
@@ -3336,8 +3630,8 @@ function renderJobSheetsTable(jobSheets) {
 
         // Status badge
         const statusBadge = jobSheet.date_paid ?
-            '<span class="badge bg-success">Paid</span>' :
-            '<span class="badge bg-warning">Unpaid</span>';
+            '<span class="apple-badge apple-badge-success">✅ Paid</span>' :
+            '<span class="apple-badge apple-badge-warning">⏳ Unpaid</span>';
 
         // Link indicators
         const customerLink = jobSheet.linked_customer_id ?
@@ -3352,15 +3646,15 @@ function renderJobSheetsTable(jobSheets) {
 
         row.innerHTML = `
             <td>${jobSheet.doc_no}</td>
-            <td class="date-compact">${formatDateUK(jobSheet.date_created)}</td>
-            <td class="customer-name">${trimCustomerName(jobSheet.customer_name) || 'No customer'}</td>
-            <td class="vehicle-info">${trimVehicleInfo(jobSheet.make, jobSheet.model)}</td>
-            <td>${jobSheet.vehicle_reg ? createNumberPlateWithDVLALink(jobSheet.vehicle_reg, 'small') : 'N/A'}</td>
-            <td><strong>£${(jobSheet.grand_total || 0).toFixed(2)}</strong></td>
-            <td>${statusBadge}</td>
-            <td>${links}</td>
-            <td>
-                <button class="btn btn-sm btn-outline-info view-job-sheet-btn" data-id="${jobSheet.id}" title="View Details">
+            <td class="date-cell">${formatDateUK(jobSheet.date_created)}</td>
+            <td class="customer-cell">${trimCustomerName(jobSheet.customer_name) || 'No customer'}</td>
+            <td>${trimVehicleInfo(jobSheet.make, jobSheet.model)}</td>
+            <td class="registration-cell">${jobSheet.vehicle_reg ? createNumberPlateWithDVLALink(jobSheet.vehicle_reg, 'small') : 'N/A'}</td>
+            <td style="font-weight: var(--apple-font-weight-semibold);">£${(jobSheet.grand_total || 0).toFixed(2)}</td>
+            <td class="status-cell">${statusBadge}</td>
+            <td style="text-align: center;">${links}</td>
+            <td class="actions-cell">
+                <button class="apple-btn apple-btn-secondary view-job-sheet-btn" data-id="${jobSheet.id}" title="View Details" style="padding: 6px 10px; min-height: auto;">
                     <i class="bi bi-eye"></i>
                 </button>
             </td>
@@ -3372,9 +3666,26 @@ function renderJobSheetsTable(jobSheets) {
     // Add event listeners for view buttons
     document.querySelectorAll('.view-job-sheet-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent row click
             const jobSheetId = e.target.closest('button').dataset.id;
             showJobSheetDetails(jobSheetId);
         });
+    });
+
+    // Make table rows clickable (GA4 style)
+    document.querySelectorAll('#job-sheets-table tr').forEach(row => {
+        if (row.querySelector('.view-job-sheet-btn')) {
+            row.style.cursor = 'pointer';
+            row.classList.add('table-row-clickable');
+            row.addEventListener('click', function(e) {
+                // Don't trigger if clicking on buttons or links
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'I' || e.target.closest('button') || e.target.closest('a')) {
+                    return;
+                }
+                const jobSheetId = this.querySelector('.view-job-sheet-btn').getAttribute('data-id');
+                showJobSheetDetails(jobSheetId);
+            });
+        }
     });
 }
 
@@ -3808,31 +4119,207 @@ Errors: ${data.errors ? data.errors.length : 0}`;
     });
 }
 
-// Show job sheet details (placeholder)
+// Show job sheet details in GA4-style modal
 function showJobSheetDetails(jobSheetId) {
     fetch(`/api/job-sheets/${jobSheetId}`)
         .then(response => response.json())
         .then(jobSheet => {
-            // For now, show basic details in an alert
-            // In a full implementation, this would open a detailed modal
-            const detailsText = `
-Job Sheet Details:
-
-Doc No: ${jobSheet.doc_no}
-Customer: ${jobSheet.customer_name}
-Vehicle: ${jobSheet.make} ${jobSheet.model}
-Registration: ${jobSheet.vehicle_reg}
-Total: £${(jobSheet.grand_total || 0).toFixed(2)}
-Status: ${jobSheet.date_paid ? 'Paid' : 'Unpaid'}
-Job Description: ${jobSheet.job_description || 'No description'}
-            `;
-
-            alert(detailsText);
+            populateJobSheetModal(jobSheet);
+            const modal = new bootstrap.Modal(document.getElementById('job-sheet-details-modal'));
+            modal.show();
         })
         .catch(error => {
             console.error('Error loading job sheet details:', error);
             showToast('Error', 'Failed to load job sheet details');
         });
+}
+
+// Populate job sheet modal with data
+function populateJobSheetModal(jobSheet) {
+    // Header information
+    document.getElementById('job-sheet-details-title').textContent = `Job Sheet ${jobSheet.doc_no}`;
+    document.getElementById('job-doc-no').textContent = jobSheet.doc_no || 'N/A';
+    document.getElementById('job-date-created').textContent = formatDateUK(jobSheet.date_created);
+    document.getElementById('job-doc-type').textContent = jobSheet.doc_type || 'Job Sheet';
+
+    // Status badge
+    const statusBadge = document.getElementById('job-status-badge');
+    if (jobSheet.date_paid) {
+        statusBadge.innerHTML = '<span class="badge bg-success">Paid</span>';
+    } else {
+        statusBadge.innerHTML = '<span class="badge bg-warning">Unpaid</span>';
+    }
+
+    // Customer information
+    const customerInfo = document.getElementById('job-customer-info');
+    customerInfo.innerHTML = `
+        <div class="row">
+            <div class="col-md-12">
+                <strong>Name:</strong> ${jobSheet.customer_name || 'Not specified'}<br>
+                <strong>Phone:</strong> ${jobSheet.customer_phone || 'Not specified'}<br>
+                <strong>Email:</strong> ${jobSheet.customer_email || 'Not specified'}<br>
+                <strong>Address:</strong> ${jobSheet.customer_address || 'Not specified'}
+            </div>
+        </div>
+    `;
+
+    // Vehicle information
+    const vehicleInfo = document.getElementById('job-vehicle-info');
+    vehicleInfo.innerHTML = `
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Registration:</strong><br>
+                ${jobSheet.vehicle_reg ? createNumberPlateWithDVLALink(jobSheet.vehicle_reg, 'medium') : 'Not specified'}
+            </div>
+            <div class="col-md-6">
+                <strong>Make & Model:</strong><br>
+                ${jobSheet.make || 'Unknown'} ${jobSheet.model || ''}
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-md-6">
+                <strong>Year:</strong> ${jobSheet.year || 'Unknown'}
+            </div>
+            <div class="col-md-6">
+                <strong>Color:</strong> ${jobSheet.color || 'Unknown'}
+            </div>
+        </div>
+    `;
+
+    // Financial information
+    const subtotal = parseFloat(jobSheet.sub_total || 0);
+    const vat = parseFloat(jobSheet.vat_total || 0);
+    const grandTotal = parseFloat(jobSheet.grand_total || 0);
+
+    document.getElementById('job-subtotal').textContent = `£${subtotal.toFixed(2)}`;
+    document.getElementById('job-vat').textContent = `£${vat.toFixed(2)}`;
+    document.getElementById('job-grand-total').textContent = `£${grandTotal.toFixed(2)}`;
+
+    document.getElementById('job-date-paid').textContent = jobSheet.date_paid ? formatDateUK(jobSheet.date_paid) : 'Not paid';
+    document.getElementById('job-payment-method').textContent = jobSheet.payment_method || '-';
+
+    const balance = jobSheet.date_paid ? 0 : grandTotal;
+    document.getElementById('job-balance').textContent = `£${balance.toFixed(2)}`;
+
+    // Parts & Labour tab
+    populatePartsLabourTab(jobSheet);
+
+    // MOT tab
+    populateMOTTab(jobSheet);
+
+    // History tab
+    populateHistoryTab(jobSheet);
+}
+
+// Populate Parts & Labour tab
+function populatePartsLabourTab(jobSheet) {
+    const partsContent = document.getElementById('job-parts-labour-content');
+
+    let content = '<div class="row">';
+
+    // Labour section
+    if (jobSheet.sub_labour_gross || jobSheet.sub_labour_net) {
+        content += `
+            <div class="col-md-6">
+                <h6><i class="fas fa-wrench"></i> Labour</h6>
+                <table class="table table-sm">
+                    <tr><td>Labour (Net):</td><td class="text-end">£${(jobSheet.sub_labour_net || 0).toFixed(2)}</td></tr>
+                    <tr><td>Labour (Gross):</td><td class="text-end">£${(jobSheet.sub_labour_gross || 0).toFixed(2)}</td></tr>
+                </table>
+            </div>
+        `;
+    }
+
+    // Parts section
+    if (jobSheet.sub_parts_gross || jobSheet.sub_parts_net) {
+        content += `
+            <div class="col-md-6">
+                <h6><i class="fas fa-cog"></i> Parts</h6>
+                <table class="table table-sm">
+                    <tr><td>Parts (Net):</td><td class="text-end">£${(jobSheet.sub_parts_net || 0).toFixed(2)}</td></tr>
+                    <tr><td>Parts (Gross):</td><td class="text-end">£${(jobSheet.sub_parts_gross || 0).toFixed(2)}</td></tr>
+                </table>
+            </div>
+        `;
+    }
+
+    content += '</div>';
+
+    if (!jobSheet.sub_labour_gross && !jobSheet.sub_parts_gross) {
+        content = '<p class="text-muted">No detailed parts or labour information available.</p>';
+    }
+
+    partsContent.innerHTML = content;
+}
+
+// Populate MOT tab
+function populateMOTTab(jobSheet) {
+    const motContent = document.getElementById('job-mot-details');
+
+    let content = '';
+
+    if (jobSheet.sub_mot_gross || jobSheet.sub_mot_net) {
+        content = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6><i class="fas fa-certificate"></i> MOT Test</h6>
+                    <table class="table table-sm">
+                        <tr><td>MOT (Net):</td><td class="text-end">£${(jobSheet.sub_mot_net || 0).toFixed(2)}</td></tr>
+                        <tr><td>MOT (Gross):</td><td class="text-end">£${(jobSheet.sub_mot_gross || 0).toFixed(2)}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6><i class="fas fa-info-circle"></i> MOT Information</h6>
+                    <p><strong>Test Date:</strong> ${formatDateUK(jobSheet.date_created)}</p>
+                    <p><strong>Vehicle:</strong> ${jobSheet.make || ''} ${jobSheet.model || ''}</p>
+                    <p><strong>Registration:</strong> ${jobSheet.vehicle_reg || 'N/A'}</p>
+                </div>
+            </div>
+        `;
+    } else {
+        content = '<p class="text-muted">This job sheet does not contain MOT test information.</p>';
+    }
+
+    motContent.innerHTML = content;
+}
+
+// Populate History tab
+function populateHistoryTab(jobSheet) {
+    const historyContent = document.getElementById('job-history-content');
+
+    const content = `
+        <div class="timeline">
+            <div class="timeline-item">
+                <div class="timeline-marker bg-primary"></div>
+                <div class="timeline-content">
+                    <h6>Job Sheet Created</h6>
+                    <p class="text-muted">${formatDateUK(jobSheet.date_created)}</p>
+                    <small>Document ${jobSheet.doc_no} was created for ${jobSheet.customer_name || 'customer'}</small>
+                </div>
+            </div>
+            ${jobSheet.date_paid ? `
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-success"></div>
+                    <div class="timeline-content">
+                        <h6>Payment Received</h6>
+                        <p class="text-muted">${formatDateUK(jobSheet.date_paid)}</p>
+                        <small>Payment of £${(jobSheet.grand_total || 0).toFixed(2)} received</small>
+                    </div>
+                </div>
+            ` : `
+                <div class="timeline-item">
+                    <div class="timeline-marker bg-warning"></div>
+                    <div class="timeline-content">
+                        <h6>Payment Pending</h6>
+                        <p class="text-muted">Outstanding balance: £${(jobSheet.grand_total || 0).toFixed(2)}</p>
+                        <small>Payment not yet received</small>
+                    </div>
+                </div>
+            `}
+        </div>
+    `;
+
+    historyContent.innerHTML = content;
 }
 
 

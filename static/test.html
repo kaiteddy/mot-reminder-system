@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page - MOT Assistant</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f2f2f7;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #007AFF;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .btn {
+            background: #007AFF;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            margin: 10px 5px;
+        }
+        .btn:hover {
+            background: #0056CC;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚗 MOT Assistant - System Test</h1>
+        
+        <div class="status success">
+            ✅ Server is running correctly
+        </div>
+        
+        <div class="status info">
+            ℹ️ This test page confirms the Flask server is working
+        </div>
+        
+        <h2>System Status</h2>
+        <ul>
+            <li>✅ Flask server: Running</li>
+            <li>✅ Static files: Serving correctly</li>
+            <li>✅ CSS: Loading properly</li>
+            <li>✅ HTML: Rendering correctly</li>
+        </ul>
+        
+        <h2>Next Steps</h2>
+        <p>If you're seeing this page, the server is working correctly. The white page issue might be due to:</p>
+        <ul>
+            <li>Browser caching - Try a hard refresh (Cmd+Shift+R)</li>
+            <li>JavaScript errors - Check browser console (F12)</li>
+            <li>CSS conflicts - Check Network tab in DevTools</li>
+        </ul>
+        
+        <div style="margin-top: 30px;">
+            <a href="/" class="btn">🏠 Go to Main Application</a>
+            <a href="/css/apple-design.css" class="btn">📄 View CSS File</a>
+            <a href="/js/main.js" class="btn">⚙️ View JavaScript File</a>
+        </div>
+        
+        <div style="margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <strong>Troubleshooting:</strong><br>
+            1. Open browser DevTools (F12)<br>
+            2. Check Console tab for JavaScript errors<br>
+            3. Check Network tab to see if all files load<br>
+            4. Try incognito/private browsing mode<br>
+        </div>
+    </div>
+</body>
+</html>

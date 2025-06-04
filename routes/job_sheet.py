@@ -262,7 +262,7 @@ def process_vehicle_file(file, file_content):
         }
 
 def process_job_sheet_file(file, file_content):
-    """Process job sheet data file"""
+    """Process job sheet data file with comprehensive relationship handling"""
     try:
         # Handle Excel files
         if file.filename.lower().endswith(('.xlsx', '.xls')):
@@ -276,6 +276,8 @@ def process_job_sheet_file(file, file_content):
         processed = 0
         created = 0
         updated = 0
+        customers_created = 0
+        vehicles_created = 0
 
         # Debug: Print column names for the first row
         if rows:
@@ -283,12 +285,18 @@ def process_job_sheet_file(file, file_content):
 
         for row in rows:
             try:
-                result = process_job_sheet_row(row)
+                result = process_job_sheet_row_comprehensive(row)
                 processed += 1
                 if result['action'] == 'created':
                     created += 1
                 elif result['action'] == 'updated':
                     updated += 1
+
+                if result.get('customer_created'):
+                    customers_created += 1
+                if result.get('vehicle_created'):
+                    vehicles_created += 1
+
             except Exception as e:
                 print(f"Error processing job sheet row: {e}")
                 print(f"Row data keys: {list(row.keys()) if row else 'No row data'}")
@@ -299,6 +307,8 @@ def process_job_sheet_file(file, file_content):
             'processed': processed,
             'created': created,
             'updated': updated,
+            'customers_created': customers_created,
+            'vehicles_created': vehicles_created,
             'success': True
         }
     except Exception as e:
@@ -360,6 +370,27 @@ def upload_job_sheets():
         # Debug: Print column names for the first row
         if rows:
             print(f"Available columns in uploaded file: {list(rows[0].keys())}")
+            print(f"First row sample data: {dict(list(rows[0].items())[:5])}")
+
+            # Test field mapping on first row
+            print("=== FIELD MAPPING TEST ===")
+            test_row = rows[0]
+            field_mapping = {
+                'customer_name': ['Customer Name', 'customer_name', 'Customer', 'Name', 'Client Name'],
+                'vehicle_reg': ['Vehicle Reg', 'vehicle_reg', 'Registration', 'Reg', 'Plate', 'Number Plate'],
+                'make': ['Make', 'vehicle_make', 'Vehicle Make', 'Manufacturer'],
+                'grand_total': ['Grand Total', 'total_gross', 'Total', 'Amount', 'Final Total'],
+                'doc_no': ['Doc No', 'doc_number', 'Document Number', 'Number', 'Job Number']
+            }
+
+            for field_name, possible_names in field_mapping.items():
+                found_col = None
+                for col_name in possible_names:
+                    if col_name in test_row:
+                        found_col = col_name
+                        break
+                print(f"  {field_name}: {found_col} -> '{test_row.get(found_col, 'NOT_FOUND')}'")
+            print("=== END FIELD MAPPING TEST ===")
 
         for row_num, row in enumerate(rows, start=2):
             try:
@@ -490,8 +521,101 @@ def trigger_dvla_lookup_for_job_sheets():
 
     return dvla_results
 
-def process_job_sheet_row(row_data):
-    """Process a single job sheet row from CSV"""
+def process_job_sheet_row_comprehensive(row_data):
+    """Process a single job sheet row with comprehensive customer/vehicle handling"""
+
+    # Field mapping for flexible column names
+    def get_field_value(row, possible_names, default=''):
+        """Get field value by trying multiple possible column names"""
+        import pandas as pd
+        for name in possible_names:
+            if name in row and row[name] is not None:
+                # Handle pandas NaN values
+                if pd.isna(row[name]):
+                    continue
+                value = str(row[name]).strip()
+                if value and value.lower() not in ['nan', 'none', '', 'null']:
+                    return value
+        return default
+
+    # Extract customer information - PRESERVE EXISTING IDs
+    customer_created = False
+    customer_account = get_field_value(row_data, ['customer_account', 'Customer Account', 'ID Customer'])
+    customer_name = get_field_value(row_data, ['customer_name', 'Customer Name', 'Customer', 'Name'])
+
+    linked_customer_id = None
+    if customer_account:
+        # Try to find existing customer by their EXISTING account ID
+        existing_customer = Customer.query.filter_by(account=customer_account).first()
+
+        if not existing_customer and customer_name:
+            # Create new customer with the EXISTING account ID from the file
+            new_customer = Customer(
+                account=customer_account,  # Use the exact ID from the file
+                name=customer_name,
+                address=get_field_value(row_data, ['customer_address', 'Customer Address', 'Address']),
+                contact_number=get_field_value(row_data, ['contact_number', 'Contact Number', 'Phone']),
+                email=get_field_value(row_data, ['email', 'Email', 'customer_email']),
+                postcode=get_field_value(row_data, ['postcode', 'Postcode', 'Post Code'])
+            )
+            db.session.add(new_customer)
+            db.session.flush()  # Get the ID
+            linked_customer_id = new_customer.id
+            customer_created = True
+            print(f"Created new customer: {customer_name} (Account: {customer_account}, DB ID: {linked_customer_id})")
+        elif existing_customer:
+            linked_customer_id = existing_customer.id
+            print(f"Found existing customer: {customer_name} (Account: {customer_account}, DB ID: {linked_customer_id})")
+    elif customer_name:
+        # Fallback: try to find by name if no account ID
+        existing_customer = Customer.query.filter(Customer.name.ilike(f"%{customer_name}%")).first()
+        if existing_customer:
+            linked_customer_id = existing_customer.id
+            print(f"Found customer by name: {customer_name} (DB ID: {linked_customer_id})")
+
+    # Next, ensure vehicle exists
+    vehicle_created = False
+    vehicle_reg = get_field_value(row_data, ['vehicle_reg', 'Vehicle Reg', 'Registration', 'Reg']).upper()
+    linked_vehicle_id = None
+
+    # Add parse_int function that was missing
+    def parse_int(value_str):
+        if not value_str or value_str.strip() == '':
+            return None
+        try:
+            return int(float(str(value_str).strip()))
+        except (ValueError, TypeError):
+            return None
+
+    if vehicle_reg:
+        existing_vehicle = Vehicle.query.filter_by(registration=vehicle_reg).first()
+
+        if not existing_vehicle:
+            # Create new vehicle
+            new_vehicle = Vehicle(
+                registration=vehicle_reg,
+                make=get_field_value(row_data, ['vehicle_make', 'Make', 'Vehicle Make']),
+                model=get_field_value(row_data, ['vehicle_model', 'Model', 'Vehicle Model']),
+                year=parse_int(get_field_value(row_data, ['year', 'Year', 'Model Year'])),
+                color=get_field_value(row_data, ['color', 'Color', 'Colour']),
+                customer_id=linked_customer_id
+            )
+            db.session.add(new_vehicle)
+            db.session.flush()  # Get the ID
+            linked_vehicle_id = new_vehicle.id
+            vehicle_created = True
+            print(f"Created new vehicle: {vehicle_reg} (ID: {linked_vehicle_id})")
+        else:
+            linked_vehicle_id = existing_vehicle.id
+            # Update customer link if missing
+            if not existing_vehicle.customer_id and linked_customer_id:
+                existing_vehicle.customer_id = linked_customer_id
+
+    # Now process the job sheet using the original logic but with proper relationships
+    return process_job_sheet_row_original(row_data, linked_customer_id, linked_vehicle_id, customer_created, vehicle_created)
+
+def process_job_sheet_row_original(row_data, linked_customer_id=None, linked_vehicle_id=None, customer_created=False, vehicle_created=False):
+    """Original job sheet processing logic with relationship IDs"""
 
     # Field mapping for flexible column names
     def get_field_value(row, possible_names, default=''):
@@ -539,8 +663,8 @@ def process_job_sheet_row(row_data):
         except (ValueError, TypeError):
             return None
 
-    # Extract data from row with flexible field mapping
-    doc_id = get_field_value(row_data, ['ID Doc', 'Doc ID', 'Document ID', 'id', 'ID'])
+    # Extract data from row with flexible field mapping - PRESERVE EXISTING IDs
+    doc_id = get_field_value(row_data, ['id', 'ID Doc', 'Doc ID', 'Document ID', 'document_id'])
     if not doc_id:
         # Generate a unique doc_id if not provided
         import uuid
@@ -549,75 +673,74 @@ def process_job_sheet_row(row_data):
     # Check if job sheet already exists
     existing_job_sheet = JobSheet.query.filter_by(doc_id=doc_id).first()
 
-    # Extract key fields with debug logging
-    customer_name = get_field_value(row_data, ['Customer Name', 'Customer', 'Name', 'Client Name'])
-    vehicle_reg = get_field_value(row_data, ['Vehicle Reg', 'Registration', 'Reg', 'Plate', 'Number Plate'])
-    make = get_field_value(row_data, ['Make', 'Vehicle Make', 'Manufacturer'])
+    # Extract key fields with debug logging - Updated field mapping
+    customer_name = get_field_value(row_data, ['customer_name', 'Customer Name', 'Customer', 'Name', 'Client Name'])
+    vehicle_reg = get_field_value(row_data, ['vehicle_reg', 'Vehicle Reg', 'Registration', 'Reg', 'Plate', 'Number Plate'])
+    make = get_field_value(row_data, ['vehicle_make', 'Make', 'Vehicle Make', 'Manufacturer'])
 
     # Debug: Print first few rows to see what's being extracted
     if doc_id.startswith('F22A5CD4') or doc_id.startswith('7E816AA1'):
         print(f"DEBUG - Doc ID: {doc_id}")
-        print(f"DEBUG - Customer Name: '{customer_name}' (from {row_data.get('Customer Name', 'NOT_FOUND')})")
-        print(f"DEBUG - Vehicle Reg: '{vehicle_reg}' (from {row_data.get('Vehicle Reg', 'NOT_FOUND')})")
-        print(f"DEBUG - Make: '{make}' (from {row_data.get('Make', 'NOT_FOUND')})")
+        print(f"DEBUG - Customer Name: '{customer_name}' (extracted successfully)")
+        print(f"DEBUG - Vehicle Reg: '{vehicle_reg}' (extracted successfully)")
+        print(f"DEBUG - Make: '{make}' (extracted successfully)")
         print(f"DEBUG - Available keys: {list(row_data.keys())[:10]}")
 
-    # Prepare job sheet data with flexible field mapping
+        # Show which columns were actually used
+        customer_col = None
+        for col in ['Customer Name', 'customer_name', 'Customer', 'Name', 'Client Name']:
+            if col in row_data and row_data[col]:
+                customer_col = col
+                break
+        print(f"DEBUG - Customer column used: {customer_col}")
+
+        vehicle_col = None
+        for col in ['Vehicle Reg', 'vehicle_reg', 'Registration', 'Reg', 'Plate', 'Number Plate']:
+            if col in row_data and row_data[col]:
+                vehicle_col = col
+                break
+        print(f"DEBUG - Vehicle Reg column used: {vehicle_col}")
+
+        make_col = None
+        for col in ['Make', 'vehicle_make', 'Vehicle Make', 'Manufacturer']:
+            if col in row_data and row_data[col]:
+                make_col = col
+                break
+        print(f"DEBUG - Make column used: {make_col}")
+
+    # Prepare job sheet data with flexible field mapping - PRESERVE EXISTING IDs
     job_sheet_data = {
         'doc_id': doc_id,
-        'doc_type': get_field_value(row_data, ['Doc Type', 'Document Type', 'Type'], 'JS'),
-        'doc_no': get_field_value(row_data, ['Doc No', 'Document Number', 'Number', 'Job Number']),
-        'date_created': parse_date(get_field_value(row_data, ['Date Created', 'Created Date', 'Date'])),
-        'date_issued': parse_date(get_field_value(row_data, ['Date Issued', 'Issued Date', 'Issue Date'])),
-        'date_paid': parse_date(get_field_value(row_data, ['Date Paid', 'Paid Date', 'Payment Date'])),
-        'customer_id_external': get_field_value(row_data, ['ID Customer', 'Customer ID', 'Customer']),
+        'doc_type': get_field_value(row_data, ['doc_type', 'Doc Type', 'Document Type', 'Type'], 'JS'),
+        'doc_no': get_field_value(row_data, ['doc_number', 'Doc No', 'Document Number', 'Number', 'Job Number']),
+        'date_created': parse_date(get_field_value(row_data, ['date_created', 'Date Created', 'Created Date', 'Date'])),
+        'date_issued': parse_date(get_field_value(row_data, ['date_issued', 'Date Issued', 'Issued Date', 'Issue Date'])),
+        'date_paid': parse_date(get_field_value(row_data, ['date_paid', 'Date Paid', 'Paid Date', 'Payment Date'])),
+        'customer_id_external': get_field_value(row_data, ['customer_account', 'ID Customer', 'Customer ID', 'Customer']),
         'customer_name': customer_name,
-        'customer_address': get_field_value(row_data, ['Customer Address', 'Address', 'Customer Addr']),
-        'contact_number': get_field_value(row_data, ['Contact Number', 'Phone', 'Mobile', 'Contact', 'Phone Number']),
+        'customer_address': get_field_value(row_data, ['customer_address', 'Customer Address', 'Address', 'Customer Addr']),
+        'contact_number': get_field_value(row_data, ['contact_number', 'Contact Number', 'Phone', 'Mobile', 'Contact', 'Phone Number']),
         'vehicle_id_external': get_field_value(row_data, ['ID Vehicle', 'Vehicle ID', 'Vehicle']),
         'vehicle_reg': vehicle_reg.upper() if vehicle_reg else '',
         'make': make,
-        'model': get_field_value(row_data, ['Model', 'Vehicle Model']),
+        'model': get_field_value(row_data, ['vehicle_model', 'Model', 'Vehicle Model']),
         'vin': get_field_value(row_data, ['VIN', 'Chassis Number', 'Vehicle VIN']),
         'mileage': parse_int(get_field_value(row_data, ['Mileage', 'Miles', 'Odometer'])),
-        'sub_labour_net': parse_decimal(get_field_value(row_data, ['Sub Labour Net', 'Labour Net', 'Labor Net'])),
-        'sub_labour_tax': parse_decimal(get_field_value(row_data, ['Sub Labour Tax', 'Labour Tax', 'Labor Tax'])),
-        'sub_labour_gross': parse_decimal(get_field_value(row_data, ['Sub Labour Gross', 'Labour Gross', 'Labor Gross'])),
-        'sub_parts_net': parse_decimal(get_field_value(row_data, ['Sub Parts Net', 'Parts Net'])),
-        'sub_parts_tax': parse_decimal(get_field_value(row_data, ['Sub Parts Tax', 'Parts Tax'])),
-        'sub_parts_gross': parse_decimal(get_field_value(row_data, ['Sub Parts Gross', 'Parts Gross'])),
-        'sub_mot_net': parse_decimal(get_field_value(row_data, ['Sub MOT Net', 'MOT Net'])),
-        'sub_mot_tax': parse_decimal(get_field_value(row_data, ['Sub MOT Tax', 'MOT Tax'])),
-        'sub_mot_gross': parse_decimal(get_field_value(row_data, ['Sub MOT Gross', 'MOT Gross'])),
-        'vat': parse_decimal(get_field_value(row_data, ['VAT', 'Tax', 'Sales Tax'])),
-        'grand_total': parse_decimal(get_field_value(row_data, ['Grand Total', 'Total', 'Amount', 'Final Total'])),
+        'sub_labour_net': parse_decimal(get_field_value(row_data, ['labour_net', 'Sub Labour Net', 'Labour Net', 'Labor Net'])),
+        'sub_labour_tax': parse_decimal(get_field_value(row_data, ['labour_tax', 'Sub Labour Tax', 'Labour Tax', 'Labor Tax'])),
+        'sub_labour_gross': parse_decimal(get_field_value(row_data, ['labour_gross', 'Sub Labour Gross', 'Labour Gross', 'Labor Gross'])),
+        'sub_parts_net': parse_decimal(get_field_value(row_data, ['parts_net', 'Sub Parts Net', 'Parts Net'])),
+        'sub_parts_tax': parse_decimal(get_field_value(row_data, ['parts_tax', 'Sub Parts Tax', 'Parts Tax'])),
+        'sub_parts_gross': parse_decimal(get_field_value(row_data, ['parts_gross', 'Sub Parts Gross', 'Parts Gross'])),
+        'sub_mot_net': parse_decimal(get_field_value(row_data, ['mot_net', 'Sub MOT Net', 'MOT Net'])),
+        'sub_mot_tax': parse_decimal(get_field_value(row_data, ['mot_tax', 'Sub MOT Tax', 'MOT Tax'])),
+        'sub_mot_gross': parse_decimal(get_field_value(row_data, ['mot_gross', 'Sub MOT Gross', 'MOT Gross'])),
+        'vat': parse_decimal(get_field_value(row_data, ['total_tax', 'VAT', 'Tax', 'Sales Tax'])),
+        'grand_total': parse_decimal(get_field_value(row_data, ['total_gross', 'Grand Total', 'Total', 'Amount', 'Final Total'])),
         'job_description': get_field_value(row_data, ['Job Description', 'Description', 'Work Description', 'Notes'])
     }
 
-    # Try to link with existing customers and vehicles
-    linked_customer_id = None
-    linked_vehicle_id = None
-    customer_linked = False
-    vehicle_linked = False
-
-    # Link customer by name (fuzzy matching)
-    if job_sheet_data['customer_name']:
-        customer = Customer.query.filter(
-            Customer.name.ilike(f"%{job_sheet_data['customer_name']}%")
-        ).first()
-        if customer:
-            linked_customer_id = customer.id
-            customer_linked = True
-
-    # Link vehicle by registration
-    if job_sheet_data['vehicle_reg']:
-        vehicle = Vehicle.query.filter_by(
-            registration=job_sheet_data['vehicle_reg']
-        ).first()
-        if vehicle:
-            linked_vehicle_id = vehicle.id
-            vehicle_linked = True
-
+    # Use the provided relationship IDs instead of trying to find them again
     job_sheet_data['linked_customer_id'] = linked_customer_id
     job_sheet_data['linked_vehicle_id'] = linked_vehicle_id
 
@@ -634,8 +757,10 @@ def process_job_sheet_row(row_data):
             'success': True,
             'action': 'updated',
             'job_sheet': existing_job_sheet.to_dict(),
-            'customer_linked': customer_linked,
-            'vehicle_linked': vehicle_linked
+            'customer_created': customer_created,
+            'vehicle_created': vehicle_created,
+            'customer_linked': linked_customer_id is not None,
+            'vehicle_linked': linked_vehicle_id is not None
         }
     else:
         # Create new job sheet
@@ -647,9 +772,15 @@ def process_job_sheet_row(row_data):
             'success': True,
             'action': 'created',
             'job_sheet': job_sheet.to_dict(),
-            'customer_linked': customer_linked,
-            'vehicle_linked': vehicle_linked
+            'customer_created': customer_created,
+            'vehicle_created': vehicle_created,
+            'customer_linked': linked_customer_id is not None,
+            'vehicle_linked': linked_vehicle_id is not None
         }
+
+def process_job_sheet_row(row_data):
+    """Process a single job sheet row from CSV - Legacy function"""
+    return process_job_sheet_row_comprehensive(row_data)
 
 @job_sheet_bp.route('/analytics', methods=['GET'])
 def get_analytics():

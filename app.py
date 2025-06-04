@@ -37,10 +37,28 @@ app.register_blueprint(reminder_bp, url_prefix='/api/reminders')
 app.register_blueprint(user_bp, url_prefix='/api/users')
 app.register_blueprint(job_sheet_bp, url_prefix='/api/job-sheets')
 
+# AI Insights endpoint
+@app.route('/api/insights')
+def get_ai_insights():
+    from services.ai_insights_service import AIInsightsService
+
+    insights_service = AIInsightsService()
+    insights = insights_service.generate_insights()
+    stats = insights_service.get_quick_stats()
+
+    return jsonify({
+        'insights': insights,
+        'stats': stats
+    })
+
 # Serve static files
 @app.route('/')
 def index():
     return send_from_directory('static', 'index.html')
+
+@app.route('/batch-verification')
+def batch_verification():
+    return send_from_directory('templates', 'batch_verification.html')
 
 @app.route('/<path:path>')
 def static_files(path):
@@ -69,7 +87,7 @@ with app.app_context():
     try:
         # Try to query the new columns to see if they exist
         db.session.execute(db.text("SELECT archived_at FROM reminders LIMIT 1"))
-        print("Database schema is up to date")
+        print("Reminders table schema is up to date")
     except Exception:
         # Columns don't exist, add them
         print("Adding new columns to reminders table...")
@@ -79,7 +97,21 @@ with app.app_context():
             db.session.commit()
             print("Successfully added new columns to reminders table")
         except Exception as e:
-            print(f"Error adding columns: {e}")
+            print(f"Error adding columns to reminders table: {e}")
+            db.session.rollback()
+
+    # Check if we need to add dvla_verified_at column to vehicles table
+    try:
+        db.session.execute(db.text("SELECT dvla_verified_at FROM vehicles LIMIT 1"))
+        print("Vehicles table schema is up to date")
+    except Exception:
+        print("Adding dvla_verified_at column to vehicles table...")
+        try:
+            db.session.execute(db.text("ALTER TABLE vehicles ADD COLUMN dvla_verified_at DATETIME"))
+            db.session.commit()
+            print("Successfully added dvla_verified_at column to vehicles table")
+        except Exception as e:
+            print(f"Error adding dvla_verified_at column: {e}")
             db.session.rollback()
 
 if __name__ == '__main__':

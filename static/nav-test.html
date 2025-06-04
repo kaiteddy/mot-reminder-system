@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Navigation Test - MOT Assistant</title>
+    <link rel="stylesheet" href="/css/apple-design.css?v=2024010301">
+    <style>
+        body { 
+            visibility: visible !important; 
+            opacity: 1 !important; 
+            background: var(--apple-bg-secondary);
+            padding: 20px;
+        }
+        .page {
+            display: none;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            margin: 20px 0;
+        }
+        .page.active {
+            display: block;
+        }
+        .nav-test {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        .nav-test button {
+            margin: 5px;
+            padding: 10px 20px;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .nav-test button:hover {
+            background: #e9ecef;
+        }
+        .nav-test button.active {
+            background: #007AFF;
+            color: white;
+            border-color: #007AFF;
+        }
+    </style>
+</head>
+<body>
+    <div class="apple-container">
+        <h1>Navigation Test</h1>
+        
+        <div class="nav-test">
+            <h3>Test Navigation</h3>
+            <button onclick="showTestPage('dashboard')" data-page="dashboard" class="active">Dashboard</button>
+            <button onclick="showTestPage('vehicles')" data-page="vehicles">Vehicles</button>
+            <button onclick="showTestPage('customers')" data-page="customers">Customers</button>
+            <button onclick="showTestPage('reminders')" data-page="reminders">Reminders</button>
+            <button onclick="showTestPage('job-sheets')" data-page="job-sheets">Job Sheets</button>
+            <button onclick="showTestPage('settings')" data-page="settings">Settings</button>
+        </div>
+
+        <!-- Test Pages -->
+        <div class="page active" id="dashboard-page">
+            <h2>🏠 Dashboard Page</h2>
+            <p>This is the dashboard page content.</p>
+            <div class="apple-card">
+                <div class="apple-card-body">
+                    <h3>Dashboard Content</h3>
+                    <p>If you can see this, the dashboard page is working correctly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="vehicles-page">
+            <h2>🚗 Vehicles Page</h2>
+            <p>This is the vehicles page content.</p>
+            <div class="apple-card">
+                <div class="apple-card-body">
+                    <h3>Vehicles Content</h3>
+                    <p>If you can see this, the vehicles page is working correctly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="customers-page">
+            <h2>👥 Customers Page</h2>
+            <p>This is the customers page content.</p>
+            <div class="apple-card">
+                <div class="apple-card-body">
+                    <h3>Customers Content</h3>
+                    <p>If you can see this, the customers page is working correctly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="reminders-page">
+            <h2>🔔 Reminders Page</h2>
+            <p>This is the reminders page content.</p>
+            <div class="apple-card">
+                <div class="apple-card-body">
+                    <h3>Reminders Content</h3>
+                    <p>If you can see this, the reminders page is working correctly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="job-sheets-page">
+            <h2>📄 Job Sheets Page</h2>
+            <p>This is the job sheets page content.</p>
+            <div class="apple-card">
+                <div class="apple-card-body">
+                    <h3>Job Sheets Content</h3>
+                    <p>If you can see this, the job sheets page is working correctly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page" id="settings-page">
+            <h2>⚙️ Settings Page</h2>
+            <p>This is the settings page content.</p>
+            <div class="apple-card">
+                <div class="apple-card-body">
+                    <h3>Settings Content</h3>
+                    <p>If you can see this, the settings page is working correctly.</p>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px; text-align: center;">
+            <p><a href="/" style="color: var(--apple-blue);">← Back to Main Application</a></p>
+        </div>
+    </div>
+
+    <script>
+        function showTestPage(page) {
+            console.log('Showing test page:', page);
+            
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(p => {
+                p.classList.remove('active');
+            });
+            
+            // Show selected page
+            const targetPage = document.getElementById(`${page}-page`);
+            if (targetPage) {
+                targetPage.classList.add('active');
+                console.log('Successfully showed page:', page);
+            } else {
+                console.error('Page not found:', `${page}-page`);
+            }
+            
+            // Update active button
+            document.querySelectorAll('.nav-test button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            const activeBtn = document.querySelector(`[data-page="${page}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('active');
+            }
+        }
+    </script>
+</body>
+</html>

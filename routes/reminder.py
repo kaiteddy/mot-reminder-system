@@ -156,50 +156,98 @@ def delete_reminder(id):
 
     return jsonify({'message': 'Reminder deleted successfully'})
 
-# Schedule reminders for vehicles with upcoming MOT expiry
+# Schedule reminders for vehicles with upcoming MOT expiry using DVLA verification
 @reminder_bp.route('/schedule', methods=['POST'])
 def schedule_reminders():
-    # Get all vehicles with MOT expiry dates
-    vehicles = Vehicle.query.filter(Vehicle.mot_expiry.isnot(None)).all()
+    """Schedule reminders using real-time DVLA verification"""
+    # Get all vehicles (we'll verify MOT dates with DVLA)
+    vehicles = Vehicle.query.filter(Vehicle.customer_id.isnot(None)).all()
 
     today = datetime.now().date()
     reminders_created = 0
+    dvla_verified = 0
+    dvla_errors = 0
+    invalid_reminders_removed = 0
+
+    # Import DVLA service
+    try:
+        from services.dvla_api_service import DVLAApiService
+        dvla_service = DVLAApiService()
+    except Exception as e:
+        return jsonify({'error': f'DVLA service unavailable: {str(e)}'}), 500
 
     for vehicle in vehicles:
-        # Skip vehicles without MOT expiry or customer
-        if not vehicle.mot_expiry or not vehicle.customer_id:
-            continue
+        try:
+            # Get real-time DVLA data for this vehicle
+            dvla_data = dvla_service.get_vehicle_details(vehicle.registration)
 
-        # Calculate days until MOT expiry
-        days_until_expiry = (vehicle.mot_expiry - today).days
+            if dvla_data and dvla_data.get('motExpiryDate'):
+                dvla_verified += 1
 
-        # Schedule reminders at different intervals
-        reminder_intervals = [30, 14, 7]  # Days before expiry
+                # Parse DVLA MOT expiry date
+                dvla_mot_expiry = datetime.strptime(dvla_data['motExpiryDate'], '%Y-%m-%d').date()
 
-        for interval in reminder_intervals:
-            if days_until_expiry <= interval:
-                # Check if reminder already exists for this interval
-                existing_reminder = Reminder.query.filter(
+                # Update vehicle with DVLA data if different
+                if vehicle.mot_expiry != dvla_mot_expiry:
+                    print(f"Updating {vehicle.registration}: {vehicle.mot_expiry} -> {dvla_mot_expiry}")
+                    vehicle.mot_expiry = dvla_mot_expiry
+                    vehicle.dvla_verified_at = datetime.utcnow()
+
+                # Calculate days until MOT expiry using DVLA data
+                days_until_expiry = (dvla_mot_expiry - today).days
+
+                # Remove any existing invalid reminders for this vehicle
+                invalid_reminders = Reminder.query.filter(
                     Reminder.vehicle_id == vehicle.id,
-                    Reminder.reminder_date == today
-                ).first()
+                    Reminder.status.in_(['scheduled', 'sent'])
+                ).all()
 
-                if not existing_reminder:
-                    # Create reminder
-                    reminder = Reminder(
-                        vehicle_id=vehicle.id,
-                        reminder_date=today,
-                        status='scheduled'
-                    )
+                for invalid_reminder in invalid_reminders:
+                    # Check if this reminder is still valid based on DVLA data
+                    if days_until_expiry > 30:  # MOT is not due within 30 days
+                        db.session.delete(invalid_reminder)
+                        invalid_reminders_removed += 1
+                        print(f"Removed invalid reminder for {vehicle.registration} (MOT valid for {days_until_expiry} days)")
 
-                    db.session.add(reminder)
-                    reminders_created += 1
+                # Only create reminders for vehicles that actually need them (within 30 days or overdue)
+                if days_until_expiry <= 30:
+                    # Check if valid reminder already exists
+                    existing_reminder = Reminder.query.filter(
+                        Reminder.vehicle_id == vehicle.id,
+                        Reminder.status.in_(['scheduled', 'sent'])
+                    ).first()
+
+                    if not existing_reminder:
+                        # Create reminder with DVLA-verified data
+                        reminder = Reminder(
+                            vehicle_id=vehicle.id,
+                            reminder_date=today,
+                            status='scheduled'
+                        )
+
+                        db.session.add(reminder)
+                        reminders_created += 1
+
+                        print(f"Created DVLA-verified reminder for {vehicle.registration}: MOT expires {dvla_mot_expiry} ({days_until_expiry} days)")
+                else:
+                    print(f"Skipped {vehicle.registration}: MOT valid for {days_until_expiry} days")
+            else:
+                dvla_errors += 1
+                print(f"No DVLA data available for {vehicle.registration}")
+
+        except Exception as e:
+            dvla_errors += 1
+            print(f"Error processing {vehicle.registration}: {e}")
 
     db.session.commit()
 
     return jsonify({
-        'message': f'Scheduled {reminders_created} new reminders',
-        'reminders_created': reminders_created
+        'message': f'Scheduled {reminders_created} DVLA-verified reminders',
+        'reminders_created': reminders_created,
+        'invalid_reminders_removed': invalid_reminders_removed,
+        'dvla_verified': dvla_verified,
+        'dvla_errors': dvla_errors,
+        'total_vehicles': len(vehicles)
     })
 
 # Process reminders (send emails/SMS)
@@ -413,3 +461,91 @@ def clear_all_reminders():
         return jsonify({
             'error': f'Failed to clear reminders: {str(e)}'
         }), 500
+
+@reminder_bp.route('/cleanup-invalid', methods=['POST'])
+def cleanup_invalid_reminders():
+    """Remove invalid reminders and regenerate with DVLA verification"""
+    try:
+        from services.dvla_api_service import DVLAApiService
+        dvla_service = DVLAApiService()
+    except Exception as e:
+        return jsonify({'error': f'DVLA service unavailable: {str(e)}'}), 500
+
+    today = date.today()
+    invalid_reminders_removed = 0
+    vehicles_updated = 0
+    new_reminders_created = 0
+    dvla_errors = 0
+
+    # Get all active reminders
+    active_reminders = Reminder.query.filter(
+        Reminder.status.in_(['scheduled', 'sent'])
+    ).all()
+
+    for reminder in active_reminders:
+        vehicle = Vehicle.query.get(reminder.vehicle_id)
+        if not vehicle:
+            continue
+
+        try:
+            # Get DVLA data
+            dvla_data = dvla_service.get_vehicle_details(vehicle.registration)
+
+            if dvla_data and dvla_data.get('motExpiryDate'):
+                dvla_mot_expiry = datetime.strptime(dvla_data['motExpiryDate'], '%Y-%m-%d').date()
+
+                # Update vehicle MOT date if different
+                if vehicle.mot_expiry != dvla_mot_expiry:
+                    vehicle.mot_expiry = dvla_mot_expiry
+                    vehicle.dvla_verified_at = datetime.now()
+                    vehicles_updated += 1
+
+                # Calculate days until expiry based on DVLA data
+                days_until_expiry = (dvla_mot_expiry - today).days
+
+                # Remove reminder if MOT is not due within 30 days
+                if days_until_expiry > 30:
+                    db.session.delete(reminder)
+                    invalid_reminders_removed += 1
+            else:
+                dvla_errors += 1
+
+        except Exception as e:
+            dvla_errors += 1
+            print(f"Error processing {vehicle.registration}: {e}")
+
+    # Create new reminders for vehicles that need them
+    vehicles_needing_reminders = Vehicle.query.filter(
+        Vehicle.customer_id.isnot(None),
+        Vehicle.mot_expiry.isnot(None)
+    ).all()
+
+    for vehicle in vehicles_needing_reminders:
+        if vehicle.mot_expiry:
+            days_until_expiry = (vehicle.mot_expiry - today).days
+
+            if days_until_expiry <= 30:
+                # Check if reminder already exists
+                existing_reminder = Reminder.query.filter(
+                    Reminder.vehicle_id == vehicle.id,
+                    Reminder.status.in_(['scheduled', 'sent'])
+                ).first()
+
+                if not existing_reminder:
+                    reminder = Reminder(
+                        vehicle_id=vehicle.id,
+                        reminder_date=today,
+                        status='scheduled'
+                    )
+                    db.session.add(reminder)
+                    new_reminders_created += 1
+
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Invalid reminders cleanup completed',
+        'invalid_reminders_removed': invalid_reminders_removed,
+        'vehicles_updated': vehicles_updated,
+        'new_reminders_created': new_reminders_created,
+        'dvla_errors': dvla_errors
+    })

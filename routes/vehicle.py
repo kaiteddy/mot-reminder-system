@@ -477,66 +477,87 @@ def process_csv_row_with_dvla(row_data, row_number):
             'error': f'Failed to create vehicle {registration}: {str(e)}'
         }
 
+@vehicle_bp.route('/dvla-batch-status', methods=['GET'])
+def get_batch_status():
+    """Get the status of the current batch DVLA verification process"""
+    from services.batch_dvla_service import BatchDVLAService
+
+    batch_service = BatchDVLAService()
+    status = batch_service.get_status()
+    return jsonify(status)
+
+@vehicle_bp.route('/dvla-batch-start', methods=['POST'])
+def start_batch_dvla_verification():
+    """Start batch DVLA verification for all vehicles"""
+    from services.batch_dvla_service import BatchDVLAService
+
+    data = request.get_json() or {}
+    verification_type = data.get('type', 'all')  # 'all', 'missing_mot', 'unverified'
+
+    batch_service = BatchDVLAService()
+    result = batch_service.start_batch_verification(verification_type)
+
+    return jsonify(result)
+
+@vehicle_bp.route('/dvla-batch-stop', methods=['POST'])
+def stop_batch_dvla_verification():
+    """Stop the current batch DVLA verification process"""
+    from services.batch_dvla_service import BatchDVLAService
+
+    batch_service = BatchDVLAService()
+    result = batch_service.stop_batch_verification()
+
+    return jsonify(result)
+
 @vehicle_bp.route('/dvla-lookup-all', methods=['POST'])
 def dvla_lookup_all_vehicles():
-    """Perform DVLA lookup for all vehicles to update MOT expiry dates"""
+    """Legacy endpoint - redirects to new batch system"""
+    from services.batch_dvla_service import BatchDVLAService
+
+    batch_service = BatchDVLAService()
+    result = batch_service.start_batch_verification('all')
+
+    return jsonify(result)
+
+@vehicle_bp.route('/count', methods=['GET'])
+def get_vehicle_count():
+    """Get count of vehicles for different verification types"""
+    verification_type = request.args.get('type', 'all')
+
     try:
-        vehicles = Vehicle.query.all()
+        if verification_type == 'all':
+            count = Vehicle.query.count()
+        elif verification_type == 'missing_mot':
+            count = Vehicle.query.filter(
+                (Vehicle.mot_expiry.is_(None)) |
+                (Vehicle.mot_expiry == '')
+            ).count()
+        elif verification_type == 'unverified':
+            from datetime import datetime, timedelta
+            cutoff_date = datetime.now() - timedelta(days=30)
+            count = Vehicle.query.filter(
+                (Vehicle.dvla_verified_at.is_(None)) |
+                (Vehicle.dvla_verified_at < cutoff_date)
+            ).count()
+        elif verification_type == 'job_sheets':
+            # Count unique registrations from job sheets not in vehicles table
+            from models.job_sheet import JobSheet
+            unique_regs = db.session.query(JobSheet.vehicle_reg).filter(
+                JobSheet.vehicle_reg.isnot(None),
+                JobSheet.vehicle_reg != ''
+            ).distinct().all()
 
-        results = {
-            'checked': 0,
-            'updated': 0,
-            'created': 0,
-            'errors': []
-        }
+            count = 0
+            for (reg,) in unique_regs:
+                if reg and not Vehicle.query.filter_by(registration=reg.upper()).first():
+                    count += 1
+        else:
+            count = 0
 
-        for vehicle in vehicles:
-            try:
-                results['checked'] += 1
-
-                # Lookup DVLA data
-                dvla_data = lookup_vehicle_dvla(vehicle.registration)
-
-                if dvla_data and dvla_data.get('registrationNumber'):
-                    updated = False
-
-                    # Update MOT expiry if missing or different
-                    if dvla_data.get('motExpiryDate'):
-                        new_mot_expiry = datetime.strptime(dvla_data['motExpiryDate'], '%Y-%m-%d').date()
-                        if not vehicle.mot_expiry or vehicle.mot_expiry != new_mot_expiry:
-                            vehicle.mot_expiry = new_mot_expiry
-                            updated = True
-
-                    # Update other fields if missing
-                    if not vehicle.make and dvla_data.get('make'):
-                        vehicle.make = dvla_data['make']
-                        updated = True
-                    if not vehicle.model and dvla_data.get('model'):
-                        vehicle.model = dvla_data['model']
-                        updated = True
-                    if not vehicle.color and dvla_data.get('primaryColour'):
-                        vehicle.color = dvla_data['primaryColour']
-                        updated = True
-                    if not vehicle.year and dvla_data.get('yearOfManufacture'):
-                        vehicle.year = int(dvla_data['yearOfManufacture'])
-                        updated = True
-
-                    if updated:
-                        results['updated'] += 1
-
-            except Exception as e:
-                error_msg = f"Error processing {vehicle.registration}: {str(e)}"
-                results['errors'].append(error_msg)
-                print(error_msg)
-
-        # Commit all changes
-        db.session.commit()
-
-        return jsonify(results)
+        return jsonify({'count': count})
 
     except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': f'Failed to perform DVLA lookup: {str(e)}'}), 500
+        return jsonify({'error': str(e), 'count': 0}), 500
 
 @vehicle_bp.route('/clear-all', methods=['POST'])
 def clear_all_vehicles():

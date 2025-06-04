@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Batch DVLA Verification - MOT Reminder System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/css/apple-design.css" rel="stylesheet">
+    <style>
+        .progress-container {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        
+        .status-badge {
+            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+        
+        .status-idle { background-color: #6c757d; color: white; }
+        .status-running { background-color: #0d6efd; color: white; }
+        .status-completed { background-color: #198754; color: white; }
+        .status-error { background-color: #dc3545; color: white; }
+        .status-stopped { background-color: #fd7e14; color: white; }
+        
+        .verification-card {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .verification-option {
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .verification-option:hover {
+            border-color: #0d6efd;
+            background-color: #f8f9ff;
+        }
+        
+        .verification-option.selected {
+            border-color: #0d6efd;
+            background-color: #e7f1ff;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #e9ecef;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        .error-log {
+            max-height: 200px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        
+        .current-vehicle {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Apple-style Navigation -->
+    <nav class="apple-navbar">
+        <div class="container">
+            <a href="/" class="brand">MOT Assistant</a>
+            <div style="display: flex; align-items: center; gap: var(--apple-spacing-md);">
+                <span style="color: var(--apple-text-secondary);">Batch DVLA Verification</span>
+                <a href="/" class="apple-btn apple-btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="apple-container" style="padding-top: var(--apple-spacing-lg);">
+        <!-- Header -->
+        <div class="apple-card" style="margin-bottom: var(--apple-spacing-lg);">
+            <div class="apple-card-header">
+                <h1 class="apple-card-title">
+                    <i class="fas fa-sync-alt" style="color: var(--apple-blue);"></i>
+                    Batch DVLA Verification
+                </h1>
+                <p class="apple-card-subtitle">Verify vehicle data against DVLA database in batches</p>
+            </div>
+        </div>
+
+        <!-- Status Overview -->
+        <div class="row">
+            <div class="col-12">
+                <div class="verification-card card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="fas fa-info-circle"></i> Verification Status</h5>
+                        <span id="status-badge" class="status-badge status-idle">Idle</span>
+                    </div>
+                    <div class="card-body">
+                        <div id="progress-container" class="progress-container" style="display: none;">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6>Progress</h6>
+                                <span id="progress-text">0 / 0</span>
+                            </div>
+                            <div class="progress mb-3" style="height: 10px;">
+                                <div id="progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            
+                            <div id="current-vehicle" class="current-vehicle" style="display: none;">
+                                <strong>Currently processing:</strong> <span id="current-reg"></span>
+                            </div>
+                            
+                            <div class="stats-grid">
+                                <div class="stat-card">
+                                    <div id="stat-total" class="stat-number text-primary">0</div>
+                                    <div class="stat-label">Total</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div id="stat-processed" class="stat-number text-info">0</div>
+                                    <div class="stat-label">Processed</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div id="stat-successful" class="stat-number text-success">0</div>
+                                    <div class="stat-label">Successful</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div id="stat-failed" class="stat-number text-danger">0</div>
+                                    <div class="stat-label">Failed</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div id="stat-skipped" class="stat-number text-warning">0</div>
+                                    <div class="stat-label">Skipped</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div id="stat-customers-linked" class="stat-number text-success">0</div>
+                                    <div class="stat-label">Customers Linked</div>
+                                </div>
+                                <div class="stat-card">
+                                    <div id="stat-customers-created" class="stat-number text-info">0</div>
+                                    <div class="stat-label">Customers Created</div>
+                                </div>
+                            </div>
+                            
+                            <div id="estimated-completion" style="display: none;">
+                                <small class="text-muted">
+                                    <i class="fas fa-clock"></i> Estimated completion: <span id="completion-time"></span>
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div id="idle-message" class="text-center text-muted">
+                            <i class="fas fa-play-circle fa-3x mb-3"></i>
+                            <p>No verification process is currently running. Select a verification type below to start.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Verification Options -->
+        <div class="row">
+            <div class="col-md-8">
+                <div class="verification-card card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-cogs"></i> Verification Options</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="verification-options">
+                            <div class="verification-option" data-type="all">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6><i class="fas fa-globe"></i> All Vehicles</h6>
+                                        <p class="mb-0 text-muted">Verify all vehicles in the database with DVLA</p>
+                                    </div>
+                                    <span class="badge bg-primary" id="count-all">0</span>
+                                </div>
+                            </div>
+                            
+                            <div class="verification-option" data-type="missing_mot">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6><i class="fas fa-exclamation-triangle"></i> Missing MOT Data</h6>
+                                        <p class="mb-0 text-muted">Vehicles without MOT expiry dates</p>
+                                    </div>
+                                    <span class="badge bg-warning" id="count-missing-mot">0</span>
+                                </div>
+                            </div>
+                            
+                            <div class="verification-option" data-type="unverified">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6><i class="fas fa-clock"></i> Recently Unverified</h6>
+                                        <p class="mb-0 text-muted">Vehicles not verified in the last 30 days</p>
+                                    </div>
+                                    <span class="badge bg-info" id="count-unverified">0</span>
+                                </div>
+                            </div>
+                            
+                            <div class="verification-option" data-type="job_sheets">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6><i class="fas fa-file-alt"></i> Job Sheet Vehicles</h6>
+                                        <p class="mb-0 text-muted">Create vehicles from job sheets and verify</p>
+                                    </div>
+                                    <span class="badge bg-secondary" id="count-job-sheets">0</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <button id="start-btn" class="btn btn-primary btn-lg me-3" disabled>
+                                <i class="fas fa-play"></i> Start Verification
+                            </button>
+                            <button id="stop-btn" class="btn btn-danger btn-lg" style="display: none;">
+                                <i class="fas fa-stop"></i> Stop Verification
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="verification-card card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="fas fa-exclamation-circle"></i> Error Log</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="error-log" class="error-log">
+                            <div class="text-muted text-center">No errors to display</div>
+                        </div>
+                        <button id="clear-errors-btn" class="btn btn-sm btn-outline-secondary mt-2" style="display: none;">
+                            <i class="fas fa-trash"></i> Clear Errors
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/batch_verification.js') }}"></script>
+</body>
+</html>

@@ -567,22 +567,69 @@ body::before {
 .ai-insight-content {
     color: var(--text-secondary);
     line-height: 1.6;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
-.ai-recommendation {
-    background: rgba(16, 185, 129, 0.1);
-    border-left: 4px solid var(--accent-green);
+.ai-insight {
     padding: 16px;
-    margin: 16px 0;
+    margin: 8px 0;
     border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    animation: fadeInUp 0.6s ease-out forwards;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.ai-urgent {
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid var(--accent-red);
 }
 
 .ai-warning {
     background: rgba(245, 158, 11, 0.1);
     border-left: 4px solid var(--accent-orange);
+}
+
+.ai-recommendation {
+    background: rgba(16, 185, 129, 0.1);
+    border-left: 4px solid var(--accent-green);
+}
+
+.ai-success {
+    background: rgba(16, 185, 129, 0.1);
+    border-left: 4px solid var(--accent-green);
+}
+
+.ai-action {
+    background: rgba(59, 130, 246, 0.1);
+    border-left: 4px solid var(--accent-blue);
+}
+
+.ai-prediction {
+    background: rgba(147, 51, 234, 0.1);
+    border-left: 4px solid #9333ea;
+}
+
+.ai-info {
+    background: rgba(107, 114, 128, 0.1);
+    border-left: 4px solid #6b7280;
+}
+
+.ai-loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+}
+
+.ai-error {
+    background: rgba(239, 68, 68, 0.1);
+    border-left: 4px solid var(--accent-red);
     padding: 16px;
-    margin: 16px 0;
+    margin: 8px 0;
     border-radius: 0 var(--border-radius) var(--border-radius) 0;
+    text-align: center;
+    color: var(--text-secondary);
 }
 
 .ai-critical {
@@ -591,6 +638,75 @@ body::before {
     padding: 16px;
     margin: 16px 0;
     border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* GA4-Style Table Enhancements */
+.table-row-clickable {
+    transition: background-color 0.2s ease;
+}
+
+.table-row-clickable:hover {
+    background-color: var(--hover-bg) !important;
+    cursor: pointer;
+}
+
+/* Timeline Styles */
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 15px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--border-color);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -22px;
+    top: 5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--card-bg);
+}
+
+.timeline-content {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    padding: 15px;
+    margin-left: 10px;
+}
+
+.timeline-content h6 {
+    margin: 0 0 5px 0;
+    color: var(--text-primary);
+}
+
+.timeline-content p {
+    margin: 0 0 5px 0;
+}
+
+.timeline-content small {
+    color: var(--text-secondary);
 }
 
 /* Urgency Indicators */
@@ -759,17 +875,19 @@ body::before {
 .dvla-check-link {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
     color: white;
-    padding: 6px 12px;
+    padding: 3px 6px;
     border-radius: var(--border-radius);
     text-decoration: none;
-    font-size: 0.8rem;
+    font-size: 0.7rem;
     font-weight: 500;
     transition: var(--transition);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    margin-left: 8px;
+    margin-left: 0;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 
 .dvla-check-link:hover {
@@ -788,8 +906,9 @@ body::before {
 .registration-container {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    gap: 6px;
+    flex-wrap: nowrap;
+    min-width: 120px;
 }
 
 /* Vehicle Details Modal Styling */
@@ -844,25 +963,37 @@ body::before {
     background-color: #f8f9fa !important;
 }
 
-/* Reminder details modal styling */
+/* Reminder details modal styling - COMPACT */
 #reminder-details-modal .modal-dialog {
-    max-width: 90%;
+    max-width: 1200px;
+    width: 95%;
+}
+
+#reminder-details-modal .modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
 }
 
 #reminder-details-modal .card {
     border: 1px solid #dee2e6;
     box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1rem;
 }
 
 #reminder-details-modal .card-header {
     background-color: #f8f9fa;
     border-bottom: 1px solid #dee2e6;
     font-weight: 600;
+    padding: 0.75rem 1rem;
+}
+
+#reminder-details-modal .card-body {
+    padding: 1rem;
 }
 
 #reminder-details-modal .row {
-    margin-bottom: 0.5rem;
-    padding: 0.25rem 0;
+    margin-bottom: 0.25rem;
+    padding: 0.15rem 0;
     border-bottom: 1px solid #f8f9fa;
 }
 
@@ -872,6 +1003,35 @@ body::before {
 
 #reminder-details-modal .badge {
     font-size: 0.75em;
+}
+
+/* Compact information display */
+#reminder-details-modal .col-sm-3,
+#reminder-details-modal .col-sm-4,
+#reminder-details-modal .col-sm-6 {
+    font-weight: 500;
+    color: #495057;
+    padding: 0.25rem 0.5rem;
+}
+
+#reminder-details-modal .col-sm-8,
+#reminder-details-modal .col-sm-9 {
+    padding: 0.25rem 0.5rem;
+}
+
+/* Remove excessive whitespace */
+#reminder-details-modal .container-fluid {
+    padding: 0;
+}
+
+#reminder-details-modal h5 {
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+}
+
+#reminder-details-modal h6 {
+    margin-bottom: 0.25rem;
+    font-size: 1rem;
 }
 
 /* Responsive Adjustments */
@@ -1108,10 +1268,11 @@ body::before {
 /* Registration container refinements */
 .registration-container {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
-    min-width: 80px;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    min-width: 120px;
+    flex-wrap: nowrap;
 }
 
 /* Hover effects for table rows */
@@ -1255,12 +1416,15 @@ body::before {
     line-height: 1.2;
 }
 
-/* CRITICAL TABLE FIXES - OVERRIDE ALL BOOTSTRAP */
+/* CRITICAL TABLE FIXES - COMPACT AUTO-FIT LAYOUT */
 .table {
-    table-layout: fixed !important;
+    table-layout: auto !important;
     width: 100% !important;
     font-size: 0.85rem !important;
     margin-bottom: 0 !important;
+    line-height: 1.3 !important;
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
 }
 
 .table th,
@@ -1280,69 +1444,133 @@ body::before {
     text-transform: uppercase !important;
     letter-spacing: 0.5px !important;
     color: #495057 !important;
+    padding: 10px 6px !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
 }
 
 .table tbody tr {
     height: 45px !important;
+    line-height: 1.3 !important;
 }
 
 .table tbody tr:hover {
     background-color: rgba(13, 110, 253, 0.05) !important;
+    transform: scale(1.001) !important;
+    transition: all 0.2s ease !important;
 }
 
-/* SPECIFIC COLUMN WIDTHS - OPTIMIZED FOR REMINDERS TABLE */
-.table th:nth-child(1), .table td:nth-child(1) { width: 130px !important; } /* Registration */
-.table th:nth-child(2), .table td:nth-child(2) { width: 140px !important; } /* Vehicle */
-.table th:nth-child(3), .table td:nth-child(3) { width: 100px !important; } /* MOT Expiry */
-.table th:nth-child(4), .table td:nth-child(4) { width: 90px !important; }  /* Days Until */
-.table th:nth-child(5), .table td:nth-child(5) { width: 80px !important; }  /* Urgency */
-.table th:nth-child(6), .table td:nth-child(6) { width: 120px !important; } /* Customer */
-.table th:nth-child(7), .table td:nth-child(7) { width: 100px !important; } /* Reminder Date */
-.table th:nth-child(8), .table td:nth-child(8) { width: 90px !important; }  /* Status */
-.table th:nth-child(9), .table td:nth-child(9) { width: 100px !important; } /* Actions */
+/* AUTO-FIT COLUMN WIDTHS - RESPONSIVE LAYOUT */
+.table th:nth-child(1), .table td:nth-child(1) { min-width: 100px; max-width: 140px; } /* Registration */
+.table th:nth-child(2), .table td:nth-child(2) { min-width: 120px; max-width: 180px; } /* Vehicle */
+.table th:nth-child(3), .table td:nth-child(3) { min-width: 90px; max-width: 120px; } /* MOT Expiry */
+.table th:nth-child(4), .table td:nth-child(4) { min-width: 70px; max-width: 100px; } /* Days Until */
+.table th:nth-child(5), .table td:nth-child(5) { min-width: 80px; max-width: 120px; } /* Urgency */
+.table th:nth-child(6), .table td:nth-child(6) { min-width: 100px; max-width: 150px; } /* Customer */
+.table th:nth-child(7), .table td:nth-child(7) { min-width: 90px; max-width: 120px; } /* Reminder Date */
+.table th:nth-child(8), .table td:nth-child(8) { min-width: 80px; max-width: 110px; } /* Status */
+.table th:nth-child(9), .table td:nth-child(9) { min-width: 90px; max-width: 120px; } /* Actions */
 
-/* FORCE SINGLE LINE TEXT */
+/* FORCE SINGLE LINE TEXT - STRONGEST RULES */
 .table .customer-name,
 .table .vehicle-info,
-.table .single-line {
+.table .single-line,
+.table-compact .customer-name,
+.table-compact .vehicle-info,
+td.customer-name,
+td.vehicle-info {
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    display: block !important;
-    max-width: 100% !important;
+    display: table-cell !important;
+    max-width: 120px !important;
+    word-wrap: normal !important;
+    word-break: normal !important;
+    line-height: 1.2 !important;
+}
+
+/* Additional table cell constraints - STRONGEST OVERRIDE */
+.table-compact td {
+    white-space: nowrap !important;
+    vertical-align: middle !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+
+/* FORCE Bootstrap table override */
+.table-striped.table-compact td,
+.table.table-compact td,
+table.table-compact td {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    word-wrap: normal !important;
+    word-break: normal !important;
+}
+
+/* Specific column width constraints for job sheets table */
+.table-compact td:nth-child(3) { /* Customer column */
+    max-width: 120px !important;
+    min-width: 80px !important;
+}
+
+.table-compact td:nth-child(4) { /* Vehicle column */
+    max-width: 100px !important;
+    min-width: 70px !important;
+}
+
+/* NUCLEAR OPTION - Force all table cells to single line */
+#job-sheets-table td {
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 150px !important;
+}
+
+#job-sheets-table td:nth-child(3) { /* Customer */
+    max-width: 120px !important;
+}
+
+#job-sheets-table td:nth-child(4) { /* Vehicle */
+    max-width: 100px !important;
 }
 
 /* UK NUMBER PLATE COMPACT */
 .table .uk-number-plate {
-    font-size: 0.75rem !important;
-    padding: 4px 8px !important;
+    font-size: 0.7rem !important;
+    padding: 2px 6px !important;
     margin: 0 !important;
     display: inline-block !important;
     white-space: nowrap !important;
+    line-height: 1.1 !important;
 }
 
 /* DVLA CHECK LINK COMPACT */
 .table .dvla-check-link {
-    font-size: 0.7rem !important;
-    padding: 2px 6px !important;
-    margin-left: 4px !important;
+    font-size: 0.65rem !important;
+    padding: 1px 4px !important;
+    margin-left: 2px !important;
     display: inline-block !important;
+    white-space: nowrap !important;
 }
 
 /* BADGE COMPACT */
 .table .badge {
-    font-size: 0.7rem !important;
-    padding: 3px 8px !important;
+    font-size: 0.65rem !important;
+    padding: 2px 6px !important;
     white-space: nowrap !important;
     display: inline-block !important;
+    line-height: 1.1 !important;
 }
 
 /* BUTTON COMPACT */
 .table .btn {
-    font-size: 0.7rem !important;
-    padding: 3px 8px !important;
-    margin: 0 2px !important;
+    font-size: 0.65rem !important;
+    padding: 2px 6px !important;
+    margin: 0 1px !important;
     white-space: nowrap !important;
+    line-height: 1.1 !important;
 }
 
 /* DATE FORMATTING */
@@ -1363,32 +1591,54 @@ body::before {
 .table .registration-container {
     display: block !important;
     white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
 }
 
-/* FORCE TABLE RESPONSIVE CONTAINER */
+/* REGISTRATION CELL SPECIFIC */
+.table .registration-cell {
+    max-width: 110px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: 0.75rem !important;
+    line-height: 1.2 !important;
+}
+
+/* FORCE TABLE RESPONSIVE CONTAINER - AUTO-FIT */
 .table-responsive {
     border: 1px solid #dee2e6 !important;
     border-radius: 8px !important;
     overflow-x: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+
+.table-responsive .table {
+    margin-bottom: 0 !important;
+    width: 100% !important;
+    min-width: 800px !important; /* Minimum width for readability */
 }
 
 /* CUSTOMER CELL SPECIFIC */
 .table .customer-cell {
-    max-width: 120px !important;
+    max-width: 90px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    font-size: 0.8rem !important;
+    font-size: 0.75rem !important;
     line-height: 1.2 !important;
 }
 
 /* VEHICLE CELL SPECIFIC */
 .table .vehicle-cell {
-    max-width: 140px !important;
+    max-width: 100px !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    font-size: 0.8rem !important;
+    font-size: 0.75rem !important;
+    line-height: 1.2 !important;
 }
 
 /* ACTIONS CELL */

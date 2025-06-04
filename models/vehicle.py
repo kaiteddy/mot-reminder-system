@@ -14,6 +14,7 @@ class Vehicle(db.Model):
     customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    dvla_verified_at = db.Column(db.DateTime, nullable=True)  # Track when last verified with DVLA
 
     # Relationship
     reminders = db.relationship('Reminder', backref='vehicle', lazy=True, cascade="all, delete-orphan")
