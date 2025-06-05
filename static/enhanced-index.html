@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MOT Reminder System - Enhanced Dashboard</title>
+    <meta name="description" content="Professional MOT reminder management system for garages">
+    
+    <!-- External CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Local CSS -->
+    <link rel="stylesheet" href="/css/apple-design.css?v=2024010301">
+    <link rel="stylesheet" href="/css/enhanced-styles.css?v=2024010301">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    
+    <style>
+        /* Critical CSS for immediate rendering */
+        body {
+            visibility: visible !important;
+            opacity: 1 !important;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        
+        .page {
+            display: none;
+        }
+        
+        #dashboard-page {
+            display: block;
+        }
+        
+        /* Loading state */
+        .initial-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--apple-background-primary, #ffffff);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .initial-loading.hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body data-theme="light">
+    <!-- Initial loading screen -->
+    <div class="initial-loading" id="initial-loading">
+        <div class="loading-container">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading MOT Reminder System...</div>
+        </div>
+    </div>
+
+    <!-- Enhanced Navigation -->
+    <nav class="apple-navbar">
+        <div class="container">
+            <a href="#" class="brand">
+                <i class="fas fa-car"></i>
+                MOT Assistant Pro
+            </a>
+            <ul class="apple-nav-links">
+                <li><a href="#" data-page="dashboard" class="active" onclick="showPageDirect('dashboard'); return false;">
+                    <i class="fas fa-tachometer-alt"></i> Dashboard
+                </a></li>
+                <li><a href="#" data-page="vehicles" onclick="showPageDirect('vehicles'); return false;">
+                    <i class="fas fa-car"></i> Vehicles
+                </a></li>
+                <li><a href="#" data-page="customers" onclick="showPageDirect('customers'); return false;">
+                    <i class="fas fa-users"></i> Customers
+                </a></li>
+                <li><a href="#" data-page="reminders" onclick="showPageDirect('reminders'); return false;">
+                    <i class="fas fa-bell"></i> Reminders
+                </a></li>
+                <li><a href="#" data-page="job-sheets" onclick="showPageDirect('job-sheets'); return false;">
+                    <i class="fas fa-clipboard-list"></i> Job Sheets
+                </a></li>
+                <li><a href="#" data-page="settings" onclick="showPageDirect('settings'); return false;">
+                    <i class="fas fa-cog"></i> Settings
+                </a></li>
+            </ul>
+            
+            <!-- Theme toggle -->
+            <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+                <i class="fas fa-moon" id="theme-icon"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <div class="apple-container" style="padding-top: var(--apple-spacing-lg);">
+        <div class="main-content">
+            
+            <!-- Dashboard Page -->
+            <div class="page" id="dashboard-page">
+                <!-- Page Header -->
+                <div class="apple-page-header">
+                    <h1 class="apple-page-title">
+                        <i class="fas fa-tachometer-alt" style="color: var(--apple-blue); margin-right: 12px;"></i>
+                        MOT Intelligence Dashboard
+                    </h1>
+                    <p class="apple-page-subtitle">Real-time vehicle monitoring and intelligent reminder management</p>
+                </div>
+
+                <!-- Quick Actions Bar -->
+                <div class="quick-actions" style="margin-bottom: 2rem;">
+                    <button class="apple-btn apple-btn-primary" onclick="refreshDashboard()">
+                        <i class="fas fa-sync-alt"></i> Refresh Data
+                    </button>
+                    <button class="apple-btn apple-btn-success" onclick="showPageDirect('vehicles')">
+                        <i class="fas fa-plus"></i> Add Vehicle
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="exportData()">
+                        <i class="fas fa-download"></i> Export Report
+                    </button>
+                </div>
+
+                <!-- AI Insights Card -->
+                <div class="apple-card" style="margin-bottom: var(--apple-spacing-lg);">
+                    <div class="apple-card-header">
+                        <h2 class="apple-card-title">
+                            <i class="fas fa-lightbulb" style="color: var(--apple-orange);"></i>
+                            AI Insights & Recommendations
+                        </h2>
+                        <button class="apple-btn apple-btn-sm apple-btn-secondary" onclick="refreshInsights()">
+                            <i class="fas fa-refresh"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="apple-card-body">
+                        <div id="ai-insights-content">
+                            <div class="loading-container">
+                                <div class="loading-spinner"></div>
+                                <div class="loading-text">Analyzing your data to generate insights...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stats Grid -->
+                <div class="apple-grid apple-grid-3" style="margin-bottom: var(--apple-spacing-lg);">
+                    <div class="apple-card">
+                        <div class="apple-card-body" style="text-align: center;">
+                            <div style="font-size: 48px; font-weight: var(--apple-font-weight-bold); color: var(--apple-red); margin-bottom: var(--apple-spacing-sm);" id="reminders-due-count">0</div>
+                            <div style="color: var(--apple-text-secondary); margin-bottom: var(--apple-spacing-md);">
+                                <i class="fas fa-exclamation-triangle"></i> Urgent Reminders
+                            </div>
+                            <button class="apple-btn apple-btn-primary" id="process-reminders-btn" onclick="processUrgentReminders()">
+                                <i class="fas fa-bolt"></i> Process Now
+                            </button>
+                        </div>
+                    </div>
+                    <div class="apple-card">
+                        <div class="apple-card-body" style="text-align: center;">
+                            <div style="font-size: 48px; font-weight: var(--apple-font-weight-bold); color: var(--apple-green); margin-bottom: var(--apple-spacing-sm);" id="vehicles-count">0</div>
+                            <div style="color: var(--apple-text-secondary); margin-bottom: var(--apple-spacing-md);">
+                                <i class="fas fa-car"></i> Total Vehicles
+                            </div>
+                            <button class="apple-btn apple-btn-success" onclick="showPageDirect('vehicles')">
+                                <i class="fas fa-eye"></i> View All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="apple-card">
+                        <div class="apple-card-body" style="text-align: center;">
+                            <div style="font-size: 48px; font-weight: var(--apple-font-weight-bold); color: var(--apple-blue); margin-bottom: var(--apple-spacing-sm);" id="customers-count">0</div>
+                            <div style="color: var(--apple-text-secondary); margin-bottom: var(--apple-spacing-md);">
+                                <i class="fas fa-users"></i> Active Customers
+                            </div>
+                            <button class="apple-btn apple-btn-secondary" onclick="showPageDirect('customers')">
+                                <i class="fas fa-address-book"></i> Manage
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Reminders Due Now Section -->
+                <div class="apple-card">
+                    <div class="apple-card-header">
+                        <h2 class="apple-card-title">
+                            <i class="fas fa-clock" style="color: var(--apple-red);"></i>
+                            Reminders Due Now
+                        </h2>
+                    </div>
+                    <div class="apple-card-body">
+                        <div id="reminders-due-now">
+                            <div class="loading-container">
+                                <div class="loading-spinner"></div>
+                                <div class="loading-text">Loading urgent reminders...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vehicles Page -->
+            <div class="page" id="vehicles-page">
+                <div class="apple-page-header">
+                    <h1 class="apple-page-title">
+                        <i class="fas fa-car" style="color: var(--apple-green); margin-right: 12px;"></i>
+                        Vehicle Management
+                    </h1>
+                    <p class="apple-page-subtitle">Manage your fleet and MOT schedules</p>
+                </div>
+
+                <!-- Vehicle Actions -->
+                <div class="page-actions" style="margin-bottom: 2rem;">
+                    <button class="apple-btn apple-btn-primary" onclick="addNewVehicle()">
+                        <i class="fas fa-plus"></i> Add Vehicle
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="importVehicles()">
+                        <i class="fas fa-upload"></i> Import CSV
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="bulkDVLACheck()">
+                        <i class="fas fa-search"></i> Bulk DVLA Check
+                    </button>
+                </div>
+
+                <!-- Vehicles List -->
+                <div id="vehicles-list">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading vehicles...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customers Page -->
+            <div class="page" id="customers-page">
+                <div class="apple-page-header">
+                    <h1 class="apple-page-title">
+                        <i class="fas fa-users" style="color: var(--apple-blue); margin-right: 12px;"></i>
+                        Customer Management
+                    </h1>
+                    <p class="apple-page-subtitle">Manage customer information and contacts</p>
+                </div>
+
+                <!-- Customer Actions -->
+                <div class="page-actions" style="margin-bottom: 2rem;">
+                    <button class="apple-btn apple-btn-primary" onclick="addNewCustomer()">
+                        <i class="fas fa-user-plus"></i> Add Customer
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="importCustomers()">
+                        <i class="fas fa-upload"></i> Import Data
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="exportCustomers()">
+                        <i class="fas fa-download"></i> Export List
+                    </button>
+                </div>
+
+                <!-- Customers List -->
+                <div id="customers-list">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading customers...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reminders Page -->
+            <div class="page" id="reminders-page">
+                <div class="apple-page-header">
+                    <h1 class="apple-page-title">
+                        <i class="fas fa-bell" style="color: var(--apple-orange); margin-right: 12px;"></i>
+                        Reminder Management
+                    </h1>
+                    <p class="apple-page-subtitle">Schedule and track MOT reminders</p>
+                </div>
+
+                <!-- Reminder Actions -->
+                <div class="page-actions" style="margin-bottom: 2rem;">
+                    <button class="apple-btn apple-btn-primary" onclick="scheduleReminders()">
+                        <i class="fas fa-calendar-plus"></i> Schedule Reminders
+                    </button>
+                    <button class="apple-btn apple-btn-success" onclick="sendReminders()">
+                        <i class="fas fa-paper-plane"></i> Send Now
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="reminderSettings()">
+                        <i class="fas fa-cog"></i> Settings
+                    </button>
+                </div>
+
+                <!-- Reminders List -->
+                <div id="reminders-list">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading reminders...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Job Sheets Page -->
+            <div class="page" id="job-sheets-page">
+                <div class="apple-page-header">
+                    <h1 class="apple-page-title">
+                        <i class="fas fa-clipboard-list" style="color: var(--apple-purple); margin-right: 12px;"></i>
+                        Job Sheet Integration
+                    </h1>
+                    <p class="apple-page-subtitle">Import and process GA4 job sheets</p>
+                </div>
+
+                <!-- Job Sheet Actions -->
+                <div class="page-actions" style="margin-bottom: 2rem;">
+                    <button class="apple-btn apple-btn-primary" onclick="uploadJobSheets()">
+                        <i class="fas fa-upload"></i> Upload Job Sheets
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="processJobSheets()">
+                        <i class="fas fa-cogs"></i> Process Data
+                    </button>
+                    <button class="apple-btn apple-btn-secondary" onclick="viewJobSheetHistory()">
+                        <i class="fas fa-history"></i> View History
+                    </button>
+                </div>
+
+                <!-- Job Sheets Content -->
+                <div id="job-sheets-content">
+                    <div class="loading-container">
+                        <div class="loading-spinner"></div>
+                        <div class="loading-text">Loading job sheets...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div class="page" id="settings-page">
+                <div class="apple-page-header">
+                    <h1 class="apple-page-title">
+                        <i class="fas fa-cog" style="color: var(--apple-gray); margin-right: 12px;"></i>
+                        System Settings
+                    </h1>
+                    <p class="apple-page-subtitle">Configure system preferences and integrations</p>
+                </div>
+
+                <!-- Settings Content -->
+                <div class="settings-grid">
+                    <div class="apple-card">
+                        <div class="apple-card-header">
+                            <h3>DVLA Integration</h3>
+                        </div>
+                        <div class="apple-card-body">
+                            <div class="form-group">
+                                <label class="form-label">API Key</label>
+                                <input type="password" class="form-input" placeholder="Enter DVLA API key">
+                            </div>
+                            <button class="apple-btn apple-btn-primary">Test Connection</button>
+                        </div>
+                    </div>
+
+                    <div class="apple-card">
+                        <div class="apple-card-header">
+                            <h3>Notification Settings</h3>
+                        </div>
+                        <div class="apple-card-body">
+                            <div class="form-group">
+                                <label class="form-label">Email Service</label>
+                                <select class="form-input">
+                                    <option>SMTP</option>
+                                    <option>SendGrid</option>
+                                    <option>Mailgun</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">SMS Service</label>
+                                <select class="form-input">
+                                    <option>Twilio</option>
+                                    <option>AWS SNS</option>
+                                    <option>Disabled</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="apple-card">
+                        <div class="apple-card-header">
+                            <h3>System Preferences</h3>
+                        </div>
+                        <div class="apple-card-body">
+                            <div class="form-group">
+                                <label class="form-label">Default Reminder Days</label>
+                                <input type="number" class="form-input" value="30" min="1" max="365">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Auto-refresh Interval (minutes)</label>
+                                <input type="number" class="form-input" value="5" min="1" max="60">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/js/enhanced-main.js?v=2024010301"></script>
+    
+    <script>
+        // Theme toggle functionality
+        function toggleTheme() {
+            const body = document.body;
+            const currentTheme = body.getAttribute('data-theme');
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            
+            body.setAttribute('data-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            
+            const icon = document.getElementById('theme-icon');
+            icon.className = newTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+        }
+
+        // Initialize theme on load
+        document.addEventListener('DOMContentLoaded', function() {
+            const savedTheme = localStorage.getItem('theme') || 'light';
+            document.body.setAttribute('data-theme', savedTheme);
+            
+            const icon = document.getElementById('theme-icon');
+            icon.className = savedTheme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+            
+            // Hide loading screen after initialization
+            setTimeout(() => {
+                document.getElementById('initial-loading').classList.add('hidden');
+            }, 1000);
+        });
+
+        // Quick action functions
+        function refreshDashboard() {
+            loadDashboardData();
+            UIUtils.showSuccess('Dashboard refreshed');
+        }
+
+        function refreshInsights() {
+            loadInsightsData().then(insights => {
+                updateInsights(insights);
+                UIUtils.showSuccess('Insights updated');
+            });
+        }
+
+        function processUrgentReminders() {
+            UIUtils.showSuccess('Processing urgent reminders...');
+        }
+
+        function exportData() {
+            UIUtils.showSuccess('Export initiated');
+        }
+
+        function addNewVehicle() {
+            UIUtils.showSuccess('Add vehicle form would open here');
+        }
+
+        function importVehicles() {
+            UIUtils.showSuccess('Import dialog would open here');
+        }
+
+        function bulkDVLACheck() {
+            UIUtils.showSuccess('Bulk DVLA check initiated');
+        }
+
+        function addNewCustomer() {
+            UIUtils.showSuccess('Add customer form would open here');
+        }
+
+        function importCustomers() {
+            UIUtils.showSuccess('Import customers dialog would open here');
+        }
+
+        function exportCustomers() {
+            UIUtils.showSuccess('Export customers initiated');
+        }
+
+        function scheduleReminders() {
+            UIUtils.showSuccess('Reminder scheduling initiated');
+        }
+
+        function sendReminders() {
+            UIUtils.showSuccess('Sending reminders...');
+        }
+
+        function reminderSettings() {
+            UIUtils.showSuccess('Reminder settings would open here');
+        }
+
+        function uploadJobSheets() {
+            UIUtils.showSuccess('Job sheet upload dialog would open here');
+        }
+
+        function processJobSheets() {
+            UIUtils.showSuccess('Processing job sheets...');
+        }
+
+        function viewJobSheetHistory() {
+            UIUtils.showSuccess('Job sheet history would open here');
+        }
+    </script>
+</body>
+</html>
+

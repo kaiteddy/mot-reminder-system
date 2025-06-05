@@ -115,5 +115,5 @@ with app.app_context():
             db.session.rollback()
 
 if __name__ == '__main__':
-    # Run the app on localhost port 5000
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    # Run the app on all interfaces port 5001
+    app.run(host='0.0.0.0', port=5001, debug=True)

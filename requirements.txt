@@ -7,6 +7,6 @@ pytesseract==0.3.10
 opencv-python==4.8.0.74
 numpy==1.24.3
 Pillow==10.0.0
-Werkzeug==3.0.1
+Werkzeug>=3.1.0
 pandas==2.0.3
 openpyxl==3.1.2
