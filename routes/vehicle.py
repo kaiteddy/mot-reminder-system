@@ -1,3 +1,6 @@
+import logging
+import re
+from datetime import datetime
 from flask import Blueprint, jsonify, request, current_app
 from database import db
 from models.vehicle import Vehicle
@@ -6,6 +9,8 @@ from services.ocr_service import OCRService
 import os
 import uuid
 from werkzeug.utils import secure_filename
+
+logger = logging.getLogger(__name__)
 
 vehicle_bp = Blueprint('vehicle', __name__)
 dvla_api = DVLAApiService()
@@ -32,19 +37,88 @@ def get_vehicle(id):
 
 @vehicle_bp.route('/', methods=['POST'])
 def create_vehicle():
-    data = request.json
-    vehicle = Vehicle(
-        registration=data['registration'],
-        make=data.get('make'),
-        model=data.get('model'),
-        color=data.get('color'),
-        year=data.get('year'),
-        mot_expiry=data.get('mot_expiry'),
-        customer_id=data.get('customer_id')
-    )
-    db.session.add(vehicle)
-    db.session.commit()
-    return jsonify(vehicle.to_dict()), 201
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Validate required fields
+        registration = data.get('registration', '').strip().upper()
+        if not registration:
+            return jsonify({'error': 'Registration is required'}), 400
+
+        if len(registration) > 20:
+            return jsonify({'error': 'Registration must be less than 20 characters'}), 400
+
+        # Basic UK registration format validation
+        if not re.match(r'^[A-Z0-9\s]{1,20}$', registration):
+            return jsonify({'error': 'Invalid registration format'}), 400
+
+        # Check if vehicle already exists
+        existing_vehicle = Vehicle.query.filter_by(registration=registration).first()
+        if existing_vehicle:
+            return jsonify({'error': 'Vehicle with this registration already exists'}), 409
+
+        # Validate optional fields
+        make = data.get('make', '').strip() if data.get('make') else None
+        if make and len(make) > 50:
+            return jsonify({'error': 'Make must be less than 50 characters'}), 400
+
+        model = data.get('model', '').strip() if data.get('model') else None
+        if model and len(model) > 50:
+            return jsonify({'error': 'Model must be less than 50 characters'}), 400
+
+        color = data.get('color', '').strip() if data.get('color') else None
+        if color and len(color) > 30:
+            return jsonify({'error': 'Color must be less than 30 characters'}), 400
+
+        # Validate year
+        year = data.get('year')
+        if year:
+            try:
+                year = int(year)
+                current_year = datetime.now().year
+                if year < 1900 or year > current_year + 1:
+                    return jsonify({'error': f'Year must be between 1900 and {current_year + 1}'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Year must be a valid number'}), 400
+
+        # Validate MOT expiry date
+        mot_expiry = None
+        if data.get('mot_expiry'):
+            try:
+                mot_expiry = datetime.strptime(data['mot_expiry'], '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({'error': 'MOT expiry must be in YYYY-MM-DD format'}), 400
+
+        # Validate customer_id if provided
+        customer_id = data.get('customer_id')
+        if customer_id:
+            from models.customer import Customer
+            customer = Customer.query.get(customer_id)
+            if not customer:
+                return jsonify({'error': 'Customer not found'}), 404
+
+        vehicle = Vehicle(
+            registration=registration,
+            make=make,
+            model=model,
+            color=color,
+            year=year,
+            mot_expiry=mot_expiry,
+            customer_id=customer_id
+        )
+
+        db.session.add(vehicle)
+        db.session.commit()
+
+        logger.info(f"Created new vehicle: {registration}")
+        return jsonify(vehicle.to_dict()), 201
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error creating vehicle: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 @vehicle_bp.route('/<int:id>', methods=['PUT'])
 def update_vehicle(id):

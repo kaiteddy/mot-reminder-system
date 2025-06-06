@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parts Management - MOT Reminder System</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="/css/unified-design-system.css?v=2024010401" rel="stylesheet">
+    <style>
+        /* Parts-specific enhancements */
+        .part-actions {
+            display: flex;
+            gap: var(--space-2);
+            flex-wrap: wrap;
+        }
+
+        .stock-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-1);
+        }
+
+        .stock-low {
+            color: var(--color-danger);
+            font-weight: var(--font-weight-semibold);
+        }
+
+        .stock-ok {
+            color: var(--color-success);
+        }
+
+        .part-price {
+            font-weight: var(--font-weight-semibold);
+            color: var(--color-text-primary);
+        }
+
+        .inventory-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+
+        .inventory-card {
+            background: var(--color-background);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-4);
+            text-align: center;
+        }
+
+        .inventory-value {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-1);
+        }
+
+        .inventory-label {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+
+        .part-category {
+            display: inline-block;
+            padding: var(--space-1) var(--space-2);
+            background: var(--color-gray-100);
+            color: var(--color-text-secondary);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-medium);
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-car"></i> MOT Reminder System
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/">Dashboard</a>
+                <a class="nav-link" href="/customers">Customers</a>
+                <a class="nav-link" href="/vehicles">Vehicles</a>
+                <a class="nav-link" href="/service-history">Service History</a>
+                <a class="nav-link active" href="/parts">Parts</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="fas fa-cogs"></i> Parts Management</h2>
+                    <div>
+                        <button class="btn btn-warning me-2" onclick="showLowStockParts()">
+                            <i class="fas fa-exclamation-triangle"></i> Low Stock
+                        </button>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addPartModal">
+                            <i class="fas fa-plus"></i> Add Part
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search and Filter Section -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label for="searchInput" class="form-label">Search</label>
+                                <input type="text" class="form-control" id="searchInput" placeholder="Search by part number, description, or supplier...">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="categoryFilter" class="form-label">Category</label>
+                                <select class="form-select" id="categoryFilter">
+                                    <option value="">All Categories</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label for="supplierFilter" class="form-label">Supplier</label>
+                                <select class="form-select" id="supplierFilter">
+                                    <option value="">All Suppliers</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label for="stockFilter" class="form-label">Stock Status</label>
+                                <select class="form-select" id="stockFilter">
+                                    <option value="">All Stock</option>
+                                    <option value="low">Low Stock</option>
+                                    <option value="in_stock">In Stock</option>
+                                    <option value="out_of_stock">Out of Stock</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <button class="btn btn-outline-primary" onclick="applyFilters()">
+                                    <i class="fas fa-filter"></i> Apply Filters
+                                </button>
+                                <button class="btn btn-outline-secondary" onclick="clearFilters()">
+                                    <i class="fas fa-times"></i> Clear
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parts Statistics -->
+                <div class="row mb-4" id="partsStats">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Total Parts</h6>
+                                        <h3 id="totalParts">0</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-cogs fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Low Stock Items</h6>
+                                        <h3 id="lowStockCount">0</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-exclamation-triangle fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Total Stock Value</h6>
+                                        <h3 id="totalStockValue">£0</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-pound-sign fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between">
+                                    <div>
+                                        <h6 class="card-title">Categories</h6>
+                                        <h3 id="totalCategories">0</h3>
+                                    </div>
+                                    <div class="align-self-center">
+                                        <i class="fas fa-tags fa-2x"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Parts Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Parts Inventory</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-striped table-hover" id="partsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Part Number</th>
+                                        <th>Description</th>
+                                        <th>Category</th>
+                                        <th>Supplier</th>
+                                        <th>Cost Price</th>
+                                        <th>Sell Price</th>
+                                        <th>Stock</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="partsTableBody">
+                                    <!-- Parts will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="loadingSpinner" class="text-center py-4" style="display: none;">
+                            <div class="spinner-border" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                        <div id="noPartsMessage" class="text-center py-4" style="display: none;">
+                            <p class="text-muted">No parts found.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Part Modal -->
+    <div class="modal fade" id="addPartModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Part</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addPartForm">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="partNumber" class="form-label">Part Number *</label>
+                                    <input type="text" class="form-control" id="partNumber" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="description" class="form-label">Description *</label>
+                                    <input type="text" class="form-control" id="description" required>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="category" class="form-label">Category</label>
+                                    <input type="text" class="form-control" id="category" list="categoryList">
+                                    <datalist id="categoryList">
+                                        <option value="Engine">
+                                        <option value="Brakes">
+                                        <option value="Suspension">
+                                        <option value="Electrical">
+                                        <option value="Exhaust">
+                                        <option value="Filters">
+                                        <option value="Oils & Fluids">
+                                        <option value="Body Parts">
+                                    </datalist>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="supplier" class="form-label">Supplier</label>
+                                    <input type="text" class="form-control" id="supplier">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="supplierPartNumber" class="form-label">Supplier Part Number</label>
+                                    <input type="text" class="form-control" id="supplierPartNumber">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="location" class="form-label">Storage Location</label>
+                                    <input type="text" class="form-control" id="location">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="costPrice" class="form-label">Cost Price (£)</label>
+                                    <input type="number" class="form-control" id="costPrice" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="sellPrice" class="form-label">Sell Price (£)</label>
+                                    <input type="number" class="form-control" id="sellPrice" step="0.01" min="0">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="stockQuantity" class="form-label">Stock Quantity</label>
+                                    <input type="number" class="form-control" id="stockQuantity" min="0" value="0">
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="mb-3">
+                                    <label for="minimumStock" class="form-label">Minimum Stock</label>
+                                    <input type="number" class="form-control" id="minimumStock" min="0" value="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="warrantyMonths" class="form-label">Warranty (Months)</label>
+                                    <input type="number" class="form-control" id="warrantyMonths" min="0" value="12">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="warrantyMileage" class="form-label">Warranty Mileage</label>
+                                    <input type="number" class="form-control" id="warrantyMileage" min="0">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" rows="3"></textarea>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="savePart()">Save Part</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/parts.js') }}"></script>
+</body>
+</html>

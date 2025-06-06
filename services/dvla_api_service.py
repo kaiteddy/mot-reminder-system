@@ -7,15 +7,26 @@ No mock data - all responses are from the live DVLA service.
 
 import requests
 import os
+import logging
 from datetime import datetime, timedelta
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 class DVLAApiService:
     def __init__(self):
-        # DVLA MOT History Trade API credentials
-        self.client_id = os.environ.get('DVLA_CLIENT_ID', '2b3911f4-55f5-4a86-a9f0-0fc02c2bff0f')
-        self.client_secret = os.environ.get('DVLA_CLIENT_SECRET', 'rWe8Q~vhlVo7Z_fFuy~zBfAOY5BqCg_PviCwIa74')
-        self.api_key = os.environ.get('DVLA_API_KEY', '8TfF8vnU2s5sP1CRm7ij69anVlLe5SRm4cNGn9yq')
-        self.tenant_id = os.environ.get('DVLA_TENANT_ID', 'a455b827-244f-4c97-b5b4-ce5d13b4d00c')
+        # DVLA MOT History Trade API credentials - MUST be set via environment variables
+        self.client_id = os.environ.get('DVLA_CLIENT_ID')
+        self.client_secret = os.environ.get('DVLA_CLIENT_SECRET')
+        self.api_key = os.environ.get('DVLA_API_KEY')
+        self.tenant_id = os.environ.get('DVLA_TENANT_ID')
+
+        # Validate that all required credentials are present
+        if not all([self.client_id, self.client_secret, self.api_key, self.tenant_id]):
+            raise ValueError(
+                "Missing required DVLA API credentials. Please set environment variables: "
+                "DVLA_CLIENT_ID, DVLA_CLIENT_SECRET, DVLA_API_KEY, DVLA_TENANT_ID"
+            )
 
         # API endpoints
         self.token_url = f'https://login.microsoftonline.com/{self.tenant_id}/oauth2/v2.0/token'
@@ -43,7 +54,7 @@ class DVLAApiService:
                 'scope': self.scope
             }
 
-            print(f"Requesting OAuth token from: {self.token_url}")
+            logger.info(f"Requesting OAuth token from: {self.token_url}")
 
             response = requests.post(self.token_url, headers=headers, data=data, timeout=30)
 
@@ -53,20 +64,20 @@ class DVLAApiService:
                 # Tokens expire in 1 hour, set expiry slightly earlier for safety
                 expires_in = token_data.get('expires_in', 3600)
                 self.token_expiry = datetime.now() + timedelta(seconds=expires_in - 60)
-                print(f"OAuth token obtained successfully, expires at: {self.token_expiry}")
+                logger.info(f"OAuth token obtained successfully, expires at: {self.token_expiry}")
                 return self.access_token
             else:
-                print(f"Failed to get OAuth token: {response.status_code} - {response.text}")
+                logger.error(f"Failed to get OAuth token: {response.status_code} - {response.text}")
                 return None
 
         except Exception as e:
-            print(f"Error getting OAuth token: {e}")
+            logger.error(f"Error getting OAuth token: {e}")
             return None
 
     def _ensure_valid_token(self):
         """Ensure we have a valid access token"""
         if not self.access_token or not self.token_expiry or datetime.now() >= self.token_expiry:
-            print("Token expired or missing, requesting new token...")
+            logger.info("Token expired or missing, requesting new token...")
             return self._get_access_token()
         return self.access_token
 
@@ -85,13 +96,13 @@ class DVLAApiService:
         # Clean the registration number
         clean_reg = self._clean_registration(registration)
         if not clean_reg:
-            print("Invalid registration number provided")
+            logger.warning("Invalid registration number provided")
             return None
 
         # Ensure we have a valid access token
         token = self._ensure_valid_token()
         if not token:
-            print("Failed to obtain access token for DVLA API")
+            logger.error("Failed to obtain access token for DVLA API")
             return None
 
         try:
@@ -105,19 +116,19 @@ class DVLAApiService:
             # The DVLA MOT History API endpoint for single vehicle lookup
             url = f'{self.api_base_url}/registration/{clean_reg}'
 
-            print(f"Making DVLA MOT History API call to: {url}")
+            logger.info(f"Making DVLA MOT History API call to: {url}")
 
             response = requests.get(url, headers=headers, timeout=30)
 
             if response.status_code == 200:
                 data = response.json()
-                print(f"DVLA API success for {clean_reg}")
+                logger.info(f"DVLA API success for {clean_reg}")
                 return self._process_dvla_response(data)
             elif response.status_code == 404:
-                print(f"Vehicle not found in DVLA records: {clean_reg}")
+                logger.warning(f"Vehicle not found in DVLA records: {clean_reg}")
                 return None
             elif response.status_code == 401:
-                print(f"DVLA API authentication failed - token may be invalid")
+                logger.warning(f"DVLA API authentication failed - token may be invalid")
                 # Try to refresh token and retry once
                 self.access_token = None
                 token = self._ensure_valid_token()
@@ -126,18 +137,18 @@ class DVLAApiService:
                     response = requests.get(url, headers=headers, timeout=30)
                     if response.status_code == 200:
                         data = response.json()
-                        print(f"DVLA API success for {clean_reg} after token refresh")
+                        logger.info(f"DVLA API success for {clean_reg} after token refresh")
                         return self._process_dvla_response(data)
                 return None
             else:
-                print(f"DVLA API error {response.status_code}: {response.text}")
+                logger.error(f"DVLA API error {response.status_code}: {response.text}")
                 return None
 
         except requests.exceptions.RequestException as e:
-            print(f"DVLA API request failed for {clean_reg}: {e}")
+            logger.error(f"DVLA API request failed for {clean_reg}: {e}")
             return None
         except Exception as e:
-            print(f"Unexpected error calling DVLA API for {clean_reg}: {e}")
+            logger.error(f"Unexpected error calling DVLA API for {clean_reg}: {e}")
             return None
 
     def _process_dvla_response(self, data):
@@ -149,7 +160,7 @@ class DVLAApiService:
             # The DVLA MOT History API returns an array of vehicles
             # Usually just one vehicle for a registration lookup
             if not data or len(data) == 0:
-                print("No vehicle data returned from DVLA API")
+                logger.warning("No vehicle data returned from DVLA API")
                 return None
 
             # Get the first (and usually only) vehicle record
@@ -199,9 +210,9 @@ class DVLAApiService:
             if 'firstUsedDate' in vehicle_data:
                 processed_data["firstUsedDate"] = vehicle_data['firstUsedDate']
 
-            print(f"Processed DVLA data for {processed_data.get('registrationNumber')}")
+            logger.info(f"Processed DVLA data for {processed_data.get('registrationNumber')}")
             return processed_data
 
         except Exception as e:
-            print(f"Error processing DVLA response: {e}")
+            logger.error(f"Error processing DVLA response: {e}")
             return None

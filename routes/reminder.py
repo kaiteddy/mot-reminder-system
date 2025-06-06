@@ -1,10 +1,12 @@
+import logging
+from datetime import datetime, timedelta, date, timezone
 from flask import Blueprint, jsonify, request
 from models.reminder import Reminder
 from models.vehicle import Vehicle
 from models.customer import Customer
-from datetime import datetime, timedelta, date
 from database import db
-import uuid
+
+logger = logging.getLogger(__name__)
 
 reminder_bp = Blueprint('reminder', __name__)
 
@@ -108,7 +110,7 @@ def update_reminder(id):
 
         # If status is changed to 'sent', update sent_at timestamp
         if data['status'] == 'sent':
-            reminder.sent_at = datetime.utcnow()
+            reminder.sent_at = datetime.now(timezone.utc)
 
     db.session.commit()
 
@@ -191,7 +193,7 @@ def schedule_reminders():
                 if vehicle.mot_expiry != dvla_mot_expiry:
                     print(f"Updating {vehicle.registration}: {vehicle.mot_expiry} -> {dvla_mot_expiry}")
                     vehicle.mot_expiry = dvla_mot_expiry
-                    vehicle.dvla_verified_at = datetime.utcnow()
+                    vehicle.dvla_verified_at = datetime.now(timezone.utc)
 
                 # Calculate days until MOT expiry using DVLA data
                 days_until_expiry = (dvla_mot_expiry - today).days
@@ -278,7 +280,7 @@ def process_reminders():
         # For local development, we'll just mark them as sent
 
         reminder.status = 'sent'
-        reminder.sent_at = datetime.utcnow()
+        reminder.sent_at = datetime.now(timezone.utc)
         processed_count += 1
 
     db.session.commit()
@@ -378,7 +380,7 @@ def generate_reminders_batch():
 
     for reminder in previous_reminders:
         reminder.status = 'archived'
-        reminder.archived_at = datetime.utcnow()
+        reminder.archived_at = datetime.now(timezone.utc)
 
     # Create new reminders
     created_reminders = []
@@ -424,11 +426,11 @@ def bulk_reminder_action():
     for reminder in reminders:
         if action == 'send':
             reminder.status = 'sent'
-            reminder.sent_at = datetime.utcnow()
+            reminder.sent_at = datetime.now(timezone.utc)
             processed_count += 1
         elif action == 'archive':
             reminder.status = 'archived'
-            reminder.archived_at = datetime.utcnow()
+            reminder.archived_at = datetime.now(timezone.utc)
             processed_count += 1
         elif action == 'delete':
             db.session.delete(reminder)

@@ -1,5 +1,5 @@
 from database import db
-from datetime import datetime
+from datetime import datetime, timezone
 
 class Customer(db.Model):
     __tablename__ = 'customers'
@@ -9,8 +9,8 @@ class Customer(db.Model):
     email = db.Column(db.String(100))
     phone = db.Column(db.String(20))
     account = db.Column(db.String(100))  # External customer account ID
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     vehicles = db.relationship('Vehicle', backref='customer', lazy=True)

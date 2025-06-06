@@ -1,5 +1,5 @@
 from database import db
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 
 class Reminder(db.Model):
     __tablename__ = 'reminders'
@@ -11,8 +11,8 @@ class Reminder(db.Model):
     sent_at = db.Column(db.DateTime)
     archived_at = db.Column(db.DateTime)
     review_batch_id = db.Column(db.String(50))  # To group reminders by upload batch
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {

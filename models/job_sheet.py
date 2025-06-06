@@ -1,5 +1,5 @@
 from database import db
-from datetime import datetime, date
+from datetime import datetime, timezone, date
 from decimal import Decimal
 
 class JobSheet(db.Model):
@@ -52,8 +52,8 @@ class JobSheet(db.Model):
     job_description = db.Column(db.Text)  # Job Description
     
     # System fields
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Foreign keys to link with existing system
     linked_customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'))

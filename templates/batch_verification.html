@@ -5,20 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Batch DVLA Verification - MOT Reminder System</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="/css/apple-design.css" rel="stylesheet">
+    <link href="/css/unified-design-system.css?v=2024010401" rel="stylesheet">
     <style>
+        /* Batch verification specific styles */
+        .verification-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: var(--space-6);
+        }
+
         .progress-container {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            background: var(--color-background);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            margin: var(--space-6) 0;
+            box-shadow: var(--shadow-sm);
         }
-        
-        .status-badge {
-            font-size: 0.9rem;
-            padding: 8px 16px;
-            border-radius: 20px;
+
+        .verification-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
         }
+
+        .stat-item {
+            text-align: center;
+            padding: var(--space-4);
+            background: var(--color-background);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+        }
+
+        .stat-number {
+            font-size: var(--font-size-2xl);
+            font-weight: var(--font-weight-bold);
+            color: var(--color-primary);
+            margin-bottom: var(--space-1);
+        }
+
+        .stat-label {
+            font-size: var(--font-size-sm);
+            color: var(--color-text-secondary);
+        }
+
+        .verification-status {
+            padding: var(--space-2) var(--space-3);
+            border-radius: var(--radius-full);
+            font-size: var(--font-size-xs);
+            font-weight: var(--font-weight-medium);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pending {
+            background: rgba(255, 149, 0, 0.1);
+            color: var(--color-warning);
+        }
+
+        .status-verified {
+            background: rgba(52, 199, 89, 0.1);
+            color: var(--color-success);
+        }
+
+        .status-failed {
+            background: rgba(255, 59, 48, 0.1);
+            color: var(--color-danger);
+        }
+    </style>
         
         .status-idle { background-color: #6c757d; color: white; }
         .status-running { background-color: #0d6efd; color: white; }
